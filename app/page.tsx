@@ -35,9 +35,12 @@ export default function Home() {
         return;
       }
       try {
-        const res = await fetch("http://localhost:8080/api/auth/verify", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
         if (res.ok) {
           setIsLoggedIn(true);
         } else {
