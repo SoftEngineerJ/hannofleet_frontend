@@ -11,20 +11,15 @@ interface DashboardProps {
 }
 
 const statusConfig = {
-  verfügbar: { label: "Verfügbar", color: "#00ba7c", bg: "bg-[#00ba7c]/10" },
-  in_benutzung: {
-    label: "In Benutzung",
+  FREI: { label: "Frei", color: "#00ba7c", bg: "bg-[#00ba7c]/10" },
+  AKTIV: {
+    label: "Aktiv",
     color: "#1d9bf0",
     bg: "bg-[#1d9bf0]/10",
   },
-  werkstatt: { label: "Werkstatt", color: "#ffd400", bg: "bg-[#ffd400]/10" },
-  unfall: { label: "Unfall", color: "#f4212e", bg: "bg-[#f4212e]/10" },
-  inaktiv: { label: "Inaktiv", color: "#71767b", bg: "bg-[#71767b]/10" },
-  ersatzfahrzeug: {
-    label: "Ersatzfahrzeug",
-    color: "#8250df",
-    bg: "bg-[#8250df]/10",
-  },
+  WERKSTATT: { label: "Werkstatt", color: "#ffd400", bg: "bg-[#ffd400]/10" },
+  UNFALL: { label: "Unfall", color: "#f4212e", bg: "bg-[#f4212e]/10" },
+  ABGEMELDET: { label: "Abgemeldet", color: "#71767b", bg: "bg-[#71767b]/10" },
 };
 
 export default function Dashboard({
@@ -82,21 +77,21 @@ export default function Dashboard({
   );
 
   const totalVehicles = vehicles.length;
-  const availableVehicles = statusCounts.verfügbar || 0;
-  const inUseVehicles = statusCounts.in_benutzung || 0;
-  const workshopVehicles = statusCounts.werkstatt || 0;
-  const accidentVehicles = statusCounts.unfall || 0;
+  const availableVehicles = statusCounts.FREI || 0;
+  const inUseVehicles = statusCounts.AKTIV || 0;
+  const workshopVehicles = statusCounts.WERKSTATT || 0;
+  const accidentVehicles = statusCounts.UNFALL || 0;
 
   const statusCards = [
     { label: "Gesamt", count: totalVehicles, color: "#71767b", icon: "CAR" },
     {
-      label: "Verfügbar",
+      label: "Frei",
       count: availableVehicles,
       color: "#00ba7c",
       icon: "CHECK",
     },
     {
-      label: "In Benutzung",
+      label: "Aktiv",
       count: inUseVehicles,
       color: "#1d9bf0",
       icon: "ROUTE",
@@ -116,10 +111,14 @@ export default function Dashboard({
   ];
 
   const upcomingDeadlines = vehicles
-    .filter((v) => v.nextInspection || v.nextOilChange)
+    .filter((v) => v.nextInspection || v.nextWorkshopAppointment)
     .sort((a, b) => {
-      const dateA = new Date(a.nextInspection || a.nextOilChange || "");
-      const dateB = new Date(b.nextInspection || b.nextOilChange || "");
+      const dateA = new Date(
+        a.nextInspection || a.nextWorkshopAppointment || "",
+      );
+      const dateB = new Date(
+        b.nextInspection || b.nextWorkshopAppointment || "",
+      );
       return dateA.getTime() - dateB.getTime();
     })
     .slice(0, 20);
@@ -146,7 +145,7 @@ export default function Dashboard({
                       style={{ color: card.color }}
                     />
                   )}
-                  {card.label === "Verfügbar" && (
+                  {card.label === "Frei" && (
                     <svg
                       className="w-5 h-5"
                       style={{ color: card.color }}
@@ -162,7 +161,7 @@ export default function Dashboard({
                       />
                     </svg>
                   )}
-                  {card.label === "In Benutzung" && (
+                  {card.label === "Aktiv" && (
                     <svg
                       className="w-5 h-5"
                       style={{ color: card.color }}
@@ -269,7 +268,7 @@ export default function Dashboard({
               {upcomingDeadlines.map((vehicle, index) => (
                 <div
                   key={vehicle.id}
-                  className="flex-shrink-0 w-56 p-3 bg-secondary/40 rounded-xl hover:bg-secondary/60 transition-colors"
+                  className="flex-shrink-0 w-56 p-3 bg-secondary rounded-xl hover:bg-secondary/80 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
@@ -305,6 +304,37 @@ export default function Dashboard({
                           )}
                         </div>
                       )}
+                      {vehicle.nextWorkshopAppointment && (
+                        <div className="text-xs text-info mt-1 flex items-center gap-1">
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                          </svg>
+                          Werkstatt:{" "}
+                          {new Date(
+                            vehicle.nextWorkshopAppointment,
+                          ).toLocaleDateString("de-DE", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "2-digit",
+                          })}
+                        </div>
+                      )}
                     </div>
                     <div
                       className="w-6 h-6 rounded-full flex items-center justify-center ml-2 shrink-0"
@@ -326,43 +356,147 @@ export default function Dashboard({
           </div>
         )}
 
-        {/* Fahrzeugübersicht */}
+        {/* Freie Fahrzeuge */}
         <div className="animate-fade-in-up" style={{ animationDelay: "0.5s" }}>
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-xl font-bold text-foreground">
-              Fahrzeugübersicht
+              Freie Fahrzeuge
+            </h2>
+            <div
+              className="px-4 py-1.5 rounded-full text-sm font-medium"
+              style={{ backgroundColor: "#00ba7c15", color: "#00ba7c" }}
+            >
+              {vehicles.filter((v) => v.status === "FREI").length} frei
+            </div>
+          </div>
+          {vehicles.filter((v) => v.status === "FREI").length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              Keine freien Fahrzeuge
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {vehicles
+                .filter((v) => v.status === "FREI")
+                .slice(0, 8)
+                .map((vehicle, index) => (
+                  <div
+                    key={vehicle.id}
+                    style={{ animationDelay: `${0.6 + index * 0.03}s` }}
+                    className="animate-fade-in-up"
+                  >
+                    <VehicleCard
+                      vehicle={vehicle}
+                      onStatusChange={onStatusChange}
+                    />
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
+        {/* Fahrzeuge in Werkstatt */}
+        <div className="animate-fade-in-up" style={{ animationDelay: "0.7s" }}>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-xl font-bold text-foreground">In Werkstatt</h2>
+            <div
+              className="px-4 py-1.5 rounded-full text-sm font-medium"
+              style={{ backgroundColor: "#ffd40015", color: "#ffd400" }}
+            >
+              {workshopVehicles} Fahrzeuge
+            </div>
+          </div>
+          {workshopVehicles === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              Keine Fahrzeuge in Werkstatt
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {vehicles
+                .filter((v) => v.status === "WERKSTATT")
+                .map((vehicle, index) => (
+                  <div
+                    key={vehicle.id}
+                    style={{ animationDelay: `${0.8 + index * 0.03}s` }}
+                    className="animate-fade-in-up"
+                  >
+                    <VehicleCard
+                      vehicle={vehicle}
+                      onStatusChange={onStatusChange}
+                    />
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
+        {/* Aktive Fahrzeuge */}
+        <div className="animate-fade-in-up" style={{ animationDelay: "0.9s" }}>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-xl font-bold text-foreground">
+              Aktive Fahrzeuge
             </h2>
             <div
               className="px-4 py-1.5 rounded-full text-sm font-medium"
               style={{ backgroundColor: "#1d9bf015", color: "#1d9bf0" }}
             >
-              {vehicles.length} Fahrzeuge
+              {inUseVehicles} Fahrzeuge
             </div>
           </div>
+          {inUseVehicles === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              Keine Fahrzeuge unterwegs
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {vehicles
+                .filter((v) => v.status === "AKTIV")
+                .map((vehicle, index) => (
+                  <div
+                    key={vehicle.id}
+                    style={{ animationDelay: `${1.0 + index * 0.03}s` }}
+                    className="animate-fade-in-up"
+                  >
+                    <VehicleCard
+                      vehicle={vehicle}
+                      onStatusChange={onStatusChange}
+                    />
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {vehicles.slice(0, 12).map((vehicle, index) => (
-              <div
-                key={vehicle.id}
-                style={{ animationDelay: `${0.6 + index * 0.03}s` }}
-                className="animate-fade-in-up"
-              >
-                <VehicleCard
-                  vehicle={vehicle}
-                  onStatusChange={onStatusChange}
-                />
-              </div>
-            ))}
+        {/* Unfall-Fahrzeuge */}
+        <div className="animate-fade-in-up" style={{ animationDelay: "1.1s" }}>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-xl font-bold text-foreground">Unfall</h2>
+            <div
+              className="px-4 py-1.5 rounded-full text-sm font-medium"
+              style={{ backgroundColor: "#f4212e15", color: "#f4212e" }}
+            >
+              {accidentVehicles} Fahrzeuge
+            </div>
           </div>
-
-          {vehicles.length > 12 && (
-            <div className="mt-6 text-center">
-              <button
-                className="px-6 py-2.5 rounded-full font-medium transition-colors"
-                style={{ backgroundColor: "#1d9bf0", color: "white" }}
-              >
-                Alle {vehicles.length} Fahrzeuge anzeigen
-              </button>
+          {accidentVehicles === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              Keine Unfallfahrzeuge
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {vehicles
+                .filter((v) => v.status === "UNFALL")
+                .map((vehicle, index) => (
+                  <div
+                    key={vehicle.id}
+                    style={{ animationDelay: `${1.2 + index * 0.03}s` }}
+                    className="animate-fade-in-up"
+                  >
+                    <VehicleCard
+                      vehicle={vehicle}
+                      onStatusChange={onStatusChange}
+                    />
+                  </div>
+                ))}
             </div>
           )}
         </div>

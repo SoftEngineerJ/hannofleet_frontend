@@ -1,128 +1,91 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Vehicle, VehicleStatus } from "@/types/vehicle";
-import { CarFront, User, Clock, Plus, X } from "lucide-react";
+import { historyApi, VehicleHistory } from "@/services/api";
+import { CarFront, User, Calendar, Filter, ChevronDown } from "lucide-react";
 
 interface HistoryProps {
   vehicles: Vehicle[];
 }
 
-interface DriverHistory {
-  id: string;
-  vehicleId: string;
-  driverName: string;
-  startDate: string;
-  endDate?: string;
-}
-
-interface StatusHistoryEntry {
-  id: string;
-  vehicleId: string;
-  status: VehicleStatus;
-  date: string;
-  endDate?: string;
-}
-
 const statusLabels: Record<VehicleStatus, string> = {
-  verfügbar: "Verfügbar",
-  in_benutzung: "In Benutzung",
-  werkstatt: "Werkstatt",
-  unfall: "Unfall",
-  inaktiv: "Inaktiv",
-  ersatzfahrzeug: "Ersatzfahrzeug",
+  FREI: "Frei",
+  AKTIV: "Aktiv",
+  WERKSTATT: "Werkstatt",
+  UNFALL: "Unfall",
+  ABGEMELDET: "Abgemeldet",
 };
 
 const statusColors: Record<VehicleStatus, string> = {
-  verfügbar: "#00ba7c",
-  in_benutzung: "#1d9bf0",
-  werkstatt: "#ffd400",
-  unfall: "#f4212e",
-  inaktiv: "#71767b",
-  ersatzfahrzeug: "#8250df",
+  FREI: "#00ba7c",
+  AKTIV: "#1d9bf0",
+  WERKSTATT: "#ffd400",
+  UNFALL: "#f4212e",
+  ABGEMELDET: "#71767b",
+};
+
+type TimelineEvent = VehicleHistory & {
+  vehicleName?: string;
+  vehiclePlate?: string;
 };
 
 export default function History({ vehicles }: HistoryProps) {
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [historyType, setHistoryType] = useState<"driver" | "status">("driver");
+  const [historyData, setHistoryData] = useState<VehicleHistory[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filterType, setFilterType] = useState<"all" | "STATUS" | "DRIVER">(
+    "all",
+  );
+  const [filterVehicle, setFilterVehicle] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([
-    {
-      id: "1",
-      vehicleId: "1",
-      status: "verfügbar",
-      date: "2025-01-01",
-      endDate: "2025-02-14",
-    },
-    {
-      id: "2",
-      vehicleId: "1",
-      status: "in_benutzung",
-      date: "2025-02-15",
-      endDate: "2025-03-19",
-    },
-    { id: "3", vehicleId: "1", status: "verfügbar", date: "2025-03-20" },
-    { id: "4", vehicleId: "2", status: "in_benutzung", date: "2024-06-01" },
-    {
-      id: "5",
-      vehicleId: "3",
-      status: "werkstatt",
-      date: "2025-04-01",
-      endDate: "2025-04-10",
-    },
-    { id: "6", vehicleId: "3", status: "verfügbar", date: "2025-04-11" },
-  ]);
+  const filteredVehicles = vehicles.filter(
+    (v) =>
+      v.model?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      v.licensePlate?.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
-  const [driverHistory, setDriverHistory] = useState<DriverHistory[]>([
-    {
-      id: "1",
-      vehicleId: "1",
-      driverName: "Max Müller",
-      startDate: "2025-01-15",
-      endDate: "2025-03-20",
-    },
-    {
-      id: "2",
-      vehicleId: "1",
-      driverName: "Anna Schmidt",
-      startDate: "2025-03-21",
-    },
-    {
-      id: "3",
-      vehicleId: "2",
-      driverName: "Tom Weber",
-      startDate: "2024-06-01",
-    },
-    {
-      id: "4",
-      vehicleId: "3",
-      driverName: "Lisa Bauer",
-      startDate: "2025-02-10",
-      endDate: "2025-04-05",
-    },
-    {
-      id: "5",
-      vehicleId: "3",
-      driverName: "Jan Hoffmann",
-      startDate: "2025-04-06",
-    },
-  ]);
+  const loadHistory = async (vehicleId: string) => {
+    if (!vehicleId) {
+      setHistoryData([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await historyApi.getByVehicle(Number(vehicleId));
+      setHistoryData(data);
+    } catch (error) {
+      console.error("Failed to load history:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
+  const handleVehicleSelect = (vehicleId: string) => {
+    setFilterVehicle(vehicleId);
+    loadHistory(vehicleId);
+  };
 
-  const vehicleDriverHistory = driverHistory
-    .filter((h) => h.vehicleId === selectedVehicleId)
+  const allEvents: TimelineEvent[] = historyData
+    .filter((h) => filterType === "all" || h.historyType === filterType)
+    .filter(
+      (h) => filterVehicle === "all" || String(h.vehicleId) === filterVehicle,
+    )
+    .map((h) => {
+      const vehicle = vehicles.find((v) => v.id === h.vehicleId);
+      return {
+        ...h,
+        vehicleName: vehicle?.model,
+        vehiclePlate: vehicle?.licensePlate,
+      };
+    })
     .sort(
       (a, b) =>
-        new Date(b.startDate).getTime() - new Date(a.startDate).getTime(),
+        new Date(b.changeDate).getTime() - new Date(a.changeDate).getTime(),
     );
 
-  const vehicleStatusHistory = statusHistory
-    .filter((h) => h.vehicleId === selectedVehicleId)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
     return new Date(dateStr).toLocaleDateString("de-DE", {
       day: "2-digit",
       month: "2-digit",
@@ -130,624 +93,292 @@ export default function History({ vehicles }: HistoryProps) {
     });
   };
 
-  const handleAddDriverHistory = (data: {
-    driverName: string;
-    startDate: string;
-    endDate?: string;
-  }) => {
-    setDriverHistory((prev) => [
-      ...prev.map((h) => {
-        if (h.vehicleId === selectedVehicleId && !h.endDate) {
-          return { ...h, endDate: data.startDate };
-        }
-        return h;
-      }),
-      {
-        id: Date.now().toString(),
-        vehicleId: selectedVehicleId,
-        driverName: data.driverName,
-        startDate: data.startDate,
-        endDate: data.endDate,
-      },
-    ]);
-    setShowAddModal(false);
-  };
-
-  return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Historie</h1>
-      </div>
-
-      <div className="flex flex-wrap gap-4 items-end">
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-sm font-medium text-muted-foreground mb-1">
-            Fahrzeug auswählen
-          </label>
-          <select
-            value={selectedVehicleId}
-            onChange={(e) => setSelectedVehicleId(e.target.value)}
-            className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-          >
-            <option value="">Fahrzeug wählen...</option>
-            {vehicles.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.model} - {v.licensePlate}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex gap-1">
-          <button
-            onClick={() => setHistoryType("driver")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              historyType === "driver"
-                ? "bg-primary text-white"
-                : "bg-secondary text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <User className="w-4 h-4 inline mr-2" />
-            Fahrer
-          </button>
-          <button
-            onClick={() => setHistoryType("status")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              historyType === "status"
-                ? "bg-primary text-white"
-                : "bg-secondary text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <CarFront className="w-4 h-4 inline mr-2" />
-            Status
-          </button>
-        </div>
-      </div>
-
-      {selectedVehicleId ? (
-        <div className="space-y-4">
-          {historyType === "driver" && (
-            <>
-              <div className="flex justify-end">
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:opacity-90 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Fahrerwechsel
-                </button>
-              </div>
-
-              <div className="bg-card border border-border rounded-xl overflow-hidden">
-                <div className="p-4 border-b border-border">
-                  <div className="flex items-center gap-3">
-                    <CarFront className="w-5 h-5 text-primary" />
-                    <div>
-                      <div className="font-medium text-foreground">
-                        {selectedVehicle?.model}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {selectedVehicle?.licensePlate}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-border">
-                  {vehicleDriverHistory.map((history, index) => (
-                    <div
-                      key={history.id}
-                      className="p-4 flex items-center gap-4"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                        <User className="w-5 h-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-foreground">
-                          {history.driverName}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {formatDate(history.startDate)}
-                          {history.endDate
-                            ? ` - ${formatDate(history.endDate)}`
-                            : " - heute"}
-                        </div>
-                      </div>
-                      {!history.endDate && (
-                        <div className="px-2 py-1 bg-green-500/10 text-green-500 text-xs font-medium rounded-md">
-                          Aktuell
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {historyType === "status" && (
-            <>
-              <div className="flex justify-end">
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:opacity-90 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Status ändern
-                </button>
-              </div>
-
-              <div className="bg-card border border-border rounded-xl overflow-hidden">
-                <div className="p-4 border-b border-border">
-                  <div className="flex items-center gap-3">
-                    <CarFront className="w-5 h-5 text-primary" />
-                    <div>
-                      <div className="font-medium text-foreground">
-                        {selectedVehicle?.model}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {selectedVehicle?.licensePlate}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-border">
-                  {vehicleStatusHistory.map((history, index) => (
-                    <div
-                      key={history.id}
-                      className="p-4 flex items-center gap-4"
-                    >
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                        style={{
-                          backgroundColor: `${statusColors[history.status]}15`,
-                        }}
-                      >
-                        <CarFront
-                          className="w-5 h-5"
-                          style={{ color: statusColors[history.status] }}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <div
-                          className="font-medium text-foreground"
-                          style={{ color: statusColors[history.status] }}
-                        >
-                          {statusLabels[history.status]}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {formatDate(history.date)}
-                          {history.endDate
-                            ? ` - ${formatDate(history.endDate)}`
-                            : " - heute"}
-                        </div>
-                      </div>
-                      {!history.endDate && (
-                        <div className="px-2 py-1 bg-green-500/10 text-green-500 text-xs font-medium rounded-md">
-                          Aktuell
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="text-center py-12 text-muted-foreground">
-          <CarFront className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>Bitte wähle ein Fahrzeug aus</p>
-        </div>
-      )}
-
-      {showAddModal && historyType === "driver" && (
-        <AddDriverHistoryModal
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddDriverHistory}
-        />
-      )}
-
-      {showAddModal && historyType === "status" && (
-        <AddStatusHistoryModal
-          currentStatus={selectedVehicle?.status}
-          onClose={() => setShowAddModal(false)}
-          onAdd={(status, date, endDate) => {
-            setStatusHistory((prev) => [
-              ...prev.map((h) => {
-                if (
-                  h.vehicleId === selectedVehicleId &&
-                  !h.id.includes("new")
-                ) {
-                  return { ...h, id: h.id + "_old" };
-                }
-                return h;
-              }),
-              {
-                id: `new-${Date.now()}`,
-                vehicleId: selectedVehicleId,
-                status,
-                date,
-                endDate,
-              },
-            ]);
-            setShowAddModal(false);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function AddDriverHistoryModal({
-  onClose,
-  onAdd,
-}: {
-  onClose: () => void;
-  onAdd: (data: {
-    driverName: string;
-    startDate: string;
-    endDate?: string;
-  }) => void;
-}) {
-  const [driverName, setDriverName] = useState("");
-  const [dateType, setDateType] = useState<"today" | "single" | "range">(
-    "today",
-  );
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!driverName || !startDate) return;
-    onAdd({
-      driverName,
-      startDate,
-      endDate: dateType !== "today" ? endDate : undefined,
+  const formatTime = (dateStr: string) => {
+    if (!dateStr) return "";
+    return new Date(dateStr).toLocaleTimeString("de-DE", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
+  const groupedEvents = allEvents.reduce(
+    (acc, event) => {
+      const date = formatDate(event.changeDate);
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(event);
+      return acc;
+    },
+    {} as Record<string, TimelineEvent[]>,
+  );
+
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-card border border-border rounded-2xl p-6 w-full max-w-md animate-fade-in-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-foreground">Fahrerwechsel</h2>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-foreground">Verlauf</h1>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Calendar className="w-4 h-4" />
+          Automatisch generiert
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">
-              Neuer Fahrer
-            </label>
-            <input
-              type="text"
-              required
-              value={driverName}
-              onChange={(e) => setDriverName(e.target.value)}
-              className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              placeholder="Name eingeben..."
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">
-              Zeitraum
-            </label>
-            <div className="flex gap-2 mb-3">
-              <button
-                type="button"
-                onClick={() => setDateType("today")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  dateType === "today"
-                    ? "bg-primary text-white"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Ab Datum
-              </button>
-              <button
-                type="button"
-                onClick={() => setDateType("single")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  dateType === "single"
-                    ? "bg-primary text-white"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Ein Tag
-              </button>
-              <button
-                type="button"
-                onClick={() => setDateType("range")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  dateType === "range"
-                    ? "bg-primary text-white"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Zeitraum
-              </button>
-            </div>
-
-            {dateType === "today" && (
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Ab Datum
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Bis heute / Aktuell
-                </p>
-              </div>
-            )}
-
-            {dateType === "single" && (
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Datum
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-              </div>
-            )}
-
-            {dateType === "range" && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">
-                    Von
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">
-                    Bis
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-colors"
-            >
-              Abbrechen
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-colors"
-            >
-              Speichern
-            </button>
-          </div>
-        </form>
       </div>
-    </div>
-  );
-}
 
-function AddStatusHistoryModal({
-  currentStatus,
-  onClose,
-  onAdd,
-}: {
-  currentStatus?: VehicleStatus;
-  onClose: () => void;
-  onAdd: (status: VehicleStatus, date: string, endDate?: string) => void;
-}) {
-  const [status, setStatus] = useState<VehicleStatus>(
-    currentStatus || "verfügbar",
-  );
-  const [dateType, setDateType] = useState<"today" | "single" | "range">(
-    "today",
-  );
-  const [date, setDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!date) return;
-    onAdd(status, date, dateType !== "today" ? endDate : undefined);
-  };
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-card border border-border rounded-2xl p-6 w-full max-w-md animate-fade-in-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-foreground">Status ändern</h2>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1">
-              Neuer Status
-            </label>
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-3">
+          <input
+            type="text"
+            placeholder="Fahrzeug suchen..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 min-w-[200px] px-4 py-2 bg-card border border-border rounded-lg text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+          <div className="relative">
             <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as VehicleStatus)}
-              className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              value={filterVehicle}
+              onChange={(e) => handleVehicleSelect(e.target.value)}
+              className="appearance-none pl-4 pr-10 py-2 bg-card border border-border rounded-lg text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer min-w-[250px]"
             >
-              <option value="verfügbar">Verfügbar</option>
-              <option value="in_benutzung">In Benutzung</option>
-              <option value="werkstatt">Werkstatt</option>
-              <option value="unfall">Unfall</option>
-              <option value="inaktiv">Inaktiv</option>
-              <option value="ersatzfahrzeug">Ersatzfahrzeug</option>
+              <option value="">Bitte auswählen</option>
+              {vehicles.map((v) => (
+                <option key={v.id} value={String(v.id)}>
+                  {v.model} - {v.licensePlate}
+                </option>
+              ))}
             </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">
-              Zeitraum
-            </label>
-            <div className="flex gap-2 mb-3">
-              <button
-                type="button"
-                onClick={() => setDateType("today")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  dateType === "today"
-                    ? "bg-primary text-white"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Ab Datum
-              </button>
-              <button
-                type="button"
-                onClick={() => setDateType("single")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  dateType === "single"
-                    ? "bg-primary text-white"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Ein Tag
-              </button>
-              <button
-                type="button"
-                onClick={() => setDateType("range")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  dateType === "range"
-                    ? "bg-primary text-white"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Zeitraum
-              </button>
-            </div>
-
-            {dateType === "today" && (
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Ab Datum
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Bis heute / Aktuell
-                </p>
+        {searchQuery && (
+          <div className="bg-card border border-border rounded-lg overflow-hidden">
+            {filteredVehicles.length === 0 ? (
+              <div className="p-4 text-center text-muted-foreground">
+                Keine Fahrzeuge gefunden
               </div>
-            )}
-
-            {dateType === "single" && (
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Datum
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-              </div>
-            )}
-
-            {dateType === "range" && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">
-                    Von
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">
-                    Bis
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
-              </div>
+            ) : (
+              filteredVehicles.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => {
+                    handleVehicleSelect(String(v.id));
+                    setSearchQuery("");
+                  }}
+                  className="w-full px-4 py-3 text-left hover:bg-secondary border-b border-border last:border-b-0 flex items-center gap-3"
+                >
+                  <CarFront className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <div className="font-medium text-foreground">{v.model}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {v.licensePlate}
+                    </div>
+                  </div>
+                </button>
+              ))
             )}
           </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-colors"
-            >
-              Abbrechen
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-colors"
-            >
-              Speichern
-            </button>
-          </div>
-        </form>
+        )}
       </div>
+
+      {filterVehicle && (
+        <div className="flex flex-wrap gap-3">
+          <div className="relative">
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value as any)}
+              className="appearance-none pl-4 pr-10 py-2 bg-card border border-border rounded-lg text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+            >
+              <option value="all">Alle Typen</option>
+              <option value="STATUS">Nur Status</option>
+              <option value="DRIVER">Nur Fahrer</option>
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          </div>
+
+          <button
+            onClick={() => {
+              setFilterVehicle("");
+              setHistoryData([]);
+            }}
+            className="px-4 py-2 bg-secondary border border-border rounded-lg text-foreground text-sm font-medium hover:bg-destructive/10 hover:border-destructive/30"
+          >
+            Fahrzeug wechseln
+          </button>
+        </div>
+      )}
+
+      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-[#1d9bf0]" />
+          Status-Änderungen:{" "}
+          {allEvents.filter((e) => e.historyType === "STATUS").length}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-[#00ba7c]" />
+          Fahrer-Wechsel:{" "}
+          {allEvents.filter((e) => e.historyType === "DRIVER").length}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12 text-muted-foreground">
+          Lade Verlauf...
+        </div>
+      ) : !filterVehicle ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <CarFront className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>Bitte wähle ein Fahrzeug aus</p>
+        </div>
+      ) : Object.keys(groupedEvents).length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>Noch keine Einträge vorhanden</p>
+          <p className="text-sm mt-1">
+            Ändere den Status oder Fahrer dieses Fahrzeugs
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {Object.entries(groupedEvents).map(([date, events]) => (
+            <div key={date}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Calendar className="w-4 h-4 text-primary" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">
+                  {date}
+                </h2>
+                <span className="text-sm text-muted-foreground">
+                  ({events.length} Änderung{events.length !== 1 ? "en" : ""})
+                </span>
+              </div>
+
+              <div className="relative ml-4 border-l-2 border-border space-y-4 pl-8">
+                {events.map((event, index) => (
+                  <div
+                    key={event.id}
+                    className="relative animate-fade-in-up"
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                  >
+                    <div
+                      className="absolute -left-[41px] w-4 h-4 rounded-full border-2 border-card"
+                      style={{
+                        backgroundColor:
+                          event.historyType === "STATUS"
+                            ? statusColors[event.newValue as VehicleStatus] ||
+                              "#71767b"
+                            : "#00ba7c",
+                      }}
+                    />
+
+                    <div className="bg-card border border-border rounded-xl p-4 hover:border-primary/30 transition-colors">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                            style={{
+                              backgroundColor:
+                                event.historyType === "STATUS"
+                                  ? `${statusColors[event.newValue as VehicleStatus] || "#71767b"}15`
+                                  : "#00ba7c15",
+                            }}
+                          >
+                            {event.historyType === "STATUS" ? (
+                              <CarFront
+                                className="w-5 h-5"
+                                style={{
+                                  color:
+                                    statusColors[
+                                      event.newValue as VehicleStatus
+                                    ] || "#71767b",
+                                }}
+                              />
+                            ) : (
+                              <User
+                                className="w-5 h-5"
+                                style={{ color: "#00ba7c" }}
+                              />
+                            )}
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-foreground">
+                                {event.vehicleName ||
+                                  `Fahrzeug #${event.vehicleId}`}
+                              </span>
+                              <span className="text-muted-foreground">|</span>
+                              <span className="text-sm text-muted-foreground">
+                                {event.vehiclePlate || ""}
+                              </span>
+                            </div>
+
+                            {event.historyType === "STATUS" ? (
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="text-sm font-medium"
+                                  style={{
+                                    color:
+                                      statusColors[
+                                        event.oldValue as VehicleStatus
+                                      ] || "#71767b",
+                                  }}
+                                >
+                                  {statusLabels[
+                                    event.oldValue as VehicleStatus
+                                  ] || event.oldValue}
+                                </span>
+                                <ChevronDown className="w-4 h-4 text-muted-foreground rotate-[-90deg]" />
+                                <span
+                                  className="text-sm font-medium"
+                                  style={{
+                                    color:
+                                      statusColors[
+                                        event.newValue as VehicleStatus
+                                      ] || "#71767b",
+                                  }}
+                                >
+                                  {statusLabels[
+                                    event.newValue as VehicleStatus
+                                  ] || event.newValue}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground">
+                                  {event.oldValue || "Kein Fahrer"}
+                                </span>
+                                <ChevronDown className="w-4 h-4 text-muted-foreground rotate-[-90deg]" />
+                                <span className="text-sm font-medium text-foreground">
+                                  {event.newValue}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <div className="text-xs text-muted-foreground">
+                            {formatTime(event.changeDate)}
+                          </div>
+                          <div className="text-xs text-primary mt-1">
+                            {event.historyType === "STATUS"
+                              ? "Status"
+                              : "Fahrer"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {event.note && event.note !== "automatisch" && (
+                        <div className="mt-2 pt-2 border-t border-border text-sm text-muted-foreground">
+                          {event.note}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

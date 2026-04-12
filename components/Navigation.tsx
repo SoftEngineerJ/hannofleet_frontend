@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   DashboardIcon,
   CarIcon,
@@ -7,7 +8,7 @@ import {
   CalendarIcon,
   HistoryIcon,
 } from "./Icons";
-import { CarFront } from "lucide-react";
+import { CarFront, Sun, Moon, Settings, LogOut } from "lucide-react";
 
 interface TabItem {
   id: string;
@@ -25,17 +26,48 @@ const tabs: TabItem[] = [
   { id: "tours", label: "Touren", icon: <MapIcon /> },
   { id: "appointments", label: "Termine", icon: <CalendarIcon /> },
   { id: "history", label: "Historie", icon: <HistoryIcon /> },
+  {
+    id: "settings",
+    label: "Einstellungen",
+    icon: <Settings className="w-4 h-4" />,
+  },
 ];
 
 interface NavigationProps {
   activeTab: string;
   onTabChange: (tabId: string) => void;
+  theme: "light" | "dark";
+  onThemeChange: (theme: "light" | "dark") => void;
+  onLogout?: () => void;
 }
 
 export default function Navigation({
   activeTab,
   onTabChange,
+  theme,
+  onThemeChange,
+  onLogout,
 }: NavigationProps) {
+  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    setResolvedTheme(theme);
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "dark" ? "light" : "dark";
+    onThemeChange(newTheme);
+  };
+
+  const getThemeIcon = () => {
+    return resolvedTheme === "dark" ? (
+      <Moon className="w-5 h-5 text-foreground" />
+    ) : (
+      <Sun className="w-5 h-5 text-foreground" />
+    );
+  };
+
   return (
     <header className="bg-card border-b border-border">
       <div className="max-w-7xl mx-auto px-6 py-4">
@@ -47,6 +79,13 @@ export default function Navigation({
             </span>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
+              title={`Theme: ${theme}`}
+            >
+              {getThemeIcon()}
+            </button>
             <div
               className="px-3 py-1.5 rounded-full text-xs font-medium"
               style={{ backgroundColor: "#1d9bf015", color: "#1d9bf0" }}
@@ -57,6 +96,15 @@ export default function Navigation({
               className="w-2 h-2 rounded-full"
               style={{ backgroundColor: "#00ba7c" }}
             ></div>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                title="Abmelden"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
 

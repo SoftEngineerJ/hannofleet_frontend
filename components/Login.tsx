@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CarFront, Eye, EyeOff, Lock, User } from "lucide-react";
+import { authApi, User as UserType } from "@/services/api";
 
 interface LoginProps {
-  onLogin: () => void;
+  onLogin: (user: UserType) => void;
 }
 
 export default function Login({ onLogin }: LoginProps) {
@@ -12,29 +13,50 @@ export default function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [logoFilter, setLogoFilter] = useState("none");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const theme = localStorage.getItem("theme") || "dark";
+    const isDark = theme === "dark";
+    setLogoFilter(isDark ? "none" : "invert(1)");
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === "admin" && password === "54321") {
-      onLogin();
-    } else {
-      setError("Ungültige Anmeldedaten");
+    setError("");
+    setLoading(true);
+
+    try {
+      const user = await authApi.login(username, password);
+      localStorage.setItem("user", JSON.stringify(user));
+      if (user.token) {
+        localStorage.setItem("token", user.token);
+      }
+      onLogin(user);
+    } catch (err: any) {
+      setError(err.message || "Ungültige Anmeldedaten");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <img
-            src="/Download.png"
-            alt="Logo"
-            className="w-40 h-40 mx-auto object-contain"
-          />
-        </div>
-
         <div className="bg-card border border-border rounded-none p-8">
-          <h2 className="text-xl font-bold text-foreground mb-6">Anmelden</h2>
+          <div className="text-center mb-6">
+            <img
+              src="/Download.png"
+              alt="Logo"
+              className="w-32 h-32 mx-auto object-contain"
+              style={{ filter: logoFilter }}
+            />
+          </div>
+
+          <h2 className="text-xl font-bold text-foreground mb-6 text-center">
+            Anmelden
+          </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -48,7 +70,6 @@ export default function Login({ onLogin }: LoginProps) {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-secondary border border-border rounded-none text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  placeholder="admin"
                 />
               </div>
             </div>
@@ -64,7 +85,6 @@ export default function Login({ onLogin }: LoginProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-12 py-3 bg-secondary border border-border rounded-none text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  placeholder="54321"
                 />
                 <button
                   type="button"
@@ -84,16 +104,23 @@ export default function Login({ onLogin }: LoginProps) {
 
             <button
               type="submit"
-              className="w-full py-3 bg-transparent border border-primary text-primary rounded-none font-medium hover:bg-primary/10 transition-colors"
+              disabled={loading}
+              className="w-full py-3 bg-transparent border border-primary text-primary rounded-none font-medium hover:bg-primary/10 transition-colors disabled:opacity-50"
             >
-              Anmelden
+              {loading ? "Anmeldung..." : "Anmelden"}
             </button>
           </form>
 
           <div className="mt-6 p-4 bg-secondary/50 rounded-none">
-            <p className="text-xs text-muted-foreground text-center">
-              Demo-Zugang: admin / 54321
-            </p>
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-xs text-muted-foreground">Hilfe & Kontakt:</p>
+              <p className="text-xs text-muted-foreground">
+                hanno-it@proton.me
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Version 1.0.0
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -16,16 +16,16 @@ interface ToursProps {
 }
 
 const statusColors: Record<string, string> = {
-  verfügbar: "#00ba7c",
-  in_benutzung: "#1d9bf0",
-  werkstatt: "#ffd400",
-  unfall: "#f4212e",
-  inaktiv: "#71767b",
-  ersatzfahrzeug: "#8250df",
+  FREI: "#00ba7c",
+  AKTIV: "#1d9bf0",
+  WERKSTATT: "#ffd400",
+  UNFALL: "#f4212e",
+  ABGEMELDET: "#71767b",
 };
 
 export default function Tours({ vehicles }: ToursProps) {
   const [expandedTours, setExpandedTours] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
 
   const vehiclesByTour = vehicles.reduce(
     (acc, vehicle) => {
@@ -39,11 +39,13 @@ export default function Tours({ vehicles }: ToursProps) {
     {} as Record<string, Vehicle[]>,
   );
 
-  const tourNumbers = Object.keys(vehiclesByTour).sort((a, b) => {
-    if (a === "ohne Tour") return 1;
-    if (b === "ohne Tour") return -1;
-    return a.localeCompare(b, undefined, { numeric: true });
-  });
+  const tourNumbers = Object.keys(vehiclesByTour)
+    .filter((tour) => tour.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      if (a === "ohne Tour") return 1;
+      if (b === "ohne Tour") return -1;
+      return a.localeCompare(b, undefined, { numeric: true });
+    });
 
   const toggleTour = (tour: string) => {
     setExpandedTours((prev) => {
@@ -58,16 +60,25 @@ export default function Tours({ vehicles }: ToursProps) {
   };
 
   const getActiveCount = (tourVehicles: Vehicle[]) => {
-    return tourVehicles.filter((v) => v.status === "in_benutzung").length;
+    return tourVehicles.filter((v) => v.status === "AKTIV").length;
   };
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Touren</h1>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <MapPin className="w-4 h-4" />
-          {tourNumbers.length} Touren
+        <div className="flex items-center gap-4">
+          <input
+            type="text"
+            placeholder="Tour suchen..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="px-3 py-2 bg-muted border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 w-48"
+          />
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <MapPin className="w-4 h-4" />
+            {tourNumbers.length} Touren
+          </div>
         </div>
       </div>
 
@@ -102,8 +113,8 @@ export default function Tours({ vehicles }: ToursProps) {
                       <span
                         className="px-2 py-0.5 rounded-full text-xs font-medium"
                         style={{
-                          backgroundColor: `${statusColors.in_benutzung}15`,
-                          color: statusColors.in_benutzung,
+                          backgroundColor: `${statusColors.AKTIV}15`,
+                          color: statusColors.AKTIV,
                         }}
                       >
                         {activeCount} aktiv
@@ -161,17 +172,15 @@ export default function Tours({ vehicles }: ToursProps) {
                           className="mt-2 text-xs font-medium"
                           style={{ color: statusColors[vehicle.status] }}
                         >
-                          {vehicle.status === "verfügbar"
-                            ? "Verfügbar"
-                            : vehicle.status === "in_benutzung"
-                              ? "In Benutzung"
-                              : vehicle.status === "werkstatt"
+                          {vehicle.status === "FREI"
+                            ? "Frei"
+                            : vehicle.status === "AKTIV"
+                              ? "Aktiv"
+                              : vehicle.status === "WERKSTATT"
                                 ? "Werkstatt"
-                                : vehicle.status === "unfall"
+                                : vehicle.status === "UNFALL"
                                   ? "Unfall"
-                                  : vehicle.status === "inaktiv"
-                                    ? "Inaktiv"
-                                    : "Ersatzfahrzeug"}
+                                  : "Abgemeldet"}
                         </div>
                       </div>
                     ))}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Vehicle, VehicleStatus } from "@/types/vehicle";
 import VehicleCard from "./VehicleCard";
+import { historyApi, vehicleApi } from "@/services/api";
 import {
   Search,
   Plus,
@@ -18,27 +19,26 @@ interface FleetProps {
   vehicles: Vehicle[];
   onStatusChange: (vehicleId: string, newStatus: VehicleStatus) => void;
   onAddVehicle?: (vehicle: Omit<Vehicle, "id">) => void;
+  onDeleteVehicle?: (vehicleId: string) => void;
 }
 
-const statusOptions: { value: VehicleStatus | "all"; label: string }[] = [
+const statusOptions = [
   { value: "all", label: "Alle" },
-  { value: "verfügbar", label: "Verfügbar" },
-  { value: "in_benutzung", label: "In Benutzung" },
-  { value: "werkstatt", label: "Werkstatt" },
-  { value: "unfall", label: "Unfall" },
-  { value: "inaktiv", label: "Inaktiv" },
-  { value: "ersatzfahrzeug", label: "Ersatzfahrzeug" },
+  { value: "FREI", label: "Frei" },
+  { value: "AKTIV", label: "Aktiv" },
+  { value: "WERKSTATT", label: "Werkstatt" },
+  { value: "UNFALL", label: "Unfall" },
+  { value: "ABGEMELDET", label: "Abgemeldet" },
 ];
 
 export default function Fleet({
   vehicles,
   onStatusChange,
   onAddVehicle,
+  onDeleteVehicle,
 }: FleetProps) {
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<VehicleStatus | "all">(
-    "all",
-  );
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
@@ -137,6 +137,12 @@ export default function Fleet({
             setEditingVehicle(selectedVehicle);
             setSelectedVehicle(null);
           }}
+          onDelete={() => {
+            if (onDeleteVehicle && confirm("Fahrzeug wirklich löschen?")) {
+              onDeleteVehicle(String(selectedVehicle.id));
+              setSelectedVehicle(null);
+            }
+          }}
         />
       )}
 
@@ -145,8 +151,35 @@ export default function Fleet({
           mode="edit"
           vehicle={editingVehicle}
           onClose={() => setEditingVehicle(null)}
-          onSave={(updated) => {
-            onStatusChange(updated.id, updated.status);
+          onSave={async (updated) => {
+            // Speichere Fahrzeugdaten
+            await vehicleApi.update(String(updated.id), updated);
+
+            if (editingVehicle.driver !== updated.driver && updated.driver) {
+              await historyApi.create({
+                vehicleId: Number(updated.id),
+                historyType: "DRIVER",
+                oldValue: editingVehicle.driver || "",
+                newValue: updated.driver,
+                changeDate: new Date()
+                  .toLocaleString("sv-SE")
+                  .replace(" ", "T"),
+                note: "automatisch",
+              });
+            }
+            if (editingVehicle.status !== updated.status) {
+              await historyApi.create({
+                vehicleId: Number(updated.id),
+                historyType: "STATUS",
+                oldValue: editingVehicle.status,
+                newValue: updated.status,
+                changeDate: new Date()
+                  .toLocaleString("sv-SE")
+                  .replace(" ", "T"),
+                note: "automatisch",
+              });
+            }
+            onStatusChange(String(updated.id), updated.status);
             setEditingVehicle(null);
           }}
         />
@@ -159,23 +192,24 @@ function VehicleDetailModal({
   vehicle,
   onClose,
   onEdit,
+  onDelete,
 }: {
   vehicle: Vehicle;
   onClose: () => void;
   onEdit: () => void;
+  onDelete?: () => void;
 }) {
   const statusColors: Record<string, string> = {
-    verfügbar: "#00ba7c",
-    in_benutzung: "#1d9bf0",
-    werkstatt: "#ffd400",
-    unfall: "#f4212e",
-    inaktiv: "#71767b",
-    ersatzfahrzeug: "#8250df",
+    FREI: "#00ba7c",
+    AKTIV: "#1d9bf0",
+    WERKSTATT: "#ffd400",
+    UNFALL: "#f4212e",
+    abgemeldet: "#71767b",
   };
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <div
@@ -222,29 +256,20 @@ function VehicleDetailModal({
                 className="font-medium text-foreground"
                 style={{ color: statusColors[vehicle.status] }}
               >
-                {vehicle.status === "verfügbar"
-                  ? "Verfügbar"
-                  : vehicle.status === "in_benutzung"
-                    ? "In Benutzung"
-                    : vehicle.status === "werkstatt"
+                {vehicle.status === "FREI"
+                  ? "Frei"
+                  : vehicle.status === "AKTIV"
+                    ? "Aktiv"
+                    : vehicle.status === "WERKSTATT"
                       ? "Werkstatt"
-                      : vehicle.status === "unfall"
+                      : vehicle.status === "UNFALL"
                         ? "Unfall"
-                        : vehicle.status === "inaktiv"
-                          ? "Inaktiv"
-                          : "Ersatzfahrzeug"}
+                        : "Abgemeldet"}
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-xl">
-              <Calendar className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Baujahr</p>
-                <p className="font-medium text-foreground">{vehicle.year}</p>
-              </div>
-            </div>
             <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-xl">
               <Gauge className="w-5 h-5 text-muted-foreground" />
               <div>
@@ -286,10 +311,18 @@ function VehicleDetailModal({
 
         <button
           onClick={onEdit}
-          className="w-full mt-6 px-4 py-2.5 bg-primary text-white rounded-xl font-medium hover:opacity-90 transition-colors"
+          className="w-full mt-4 px-4 py-2.5 bg-primary text-white rounded-xl font-medium hover:opacity-90 transition-colors"
         >
           Bearbeiten
         </button>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            className="w-full mt-2 px-4 py-2.5 bg-red-300 text-white rounded-xl font-medium hover:opacity-90 transition-colors"
+          >
+            Löschen
+          </button>
+        )}
       </div>
     </div>
   );
@@ -310,43 +343,105 @@ function VehicleModal({
 }) {
   const [formData, setFormData] = useState({
     licensePlate: vehicle?.licensePlate || "",
-    make: vehicle?.make || "Opel",
     model: vehicle?.model || "",
-    year: vehicle?.year || new Date().getFullYear(),
     mileage: vehicle?.mileage || 0,
-    status: vehicle?.status || ("verfügbar" as VehicleStatus),
+    status: vehicle?.status || ("FREI" as VehicleStatus),
     driver: vehicle?.driver || "",
     tourNumber: vehicle?.tourNumber || "",
     nextInspection: vehicle?.nextInspection || "",
-    nextOilChange: vehicle?.nextOilChange || "",
+    nextWorkshopAppointment: vehicle?.nextWorkshopAppointment || "",
+    nextInsurance: vehicle?.nextInsurance || "",
   });
+  const [tourError, setTourError] = useState(false);
+  const [licenseError, setLicenseError] = useState(false);
+
+  const lpRef1 = useRef<HTMLInputElement>(null);
+  const lpRef2 = useRef<HTMLInputElement>(null);
+  const lpRef3 = useRef<HTMLInputElement>(null);
+
+  const handleKeyDown = (
+    e: React.KeyboardEvent,
+    nextRef: React.RefObject<HTMLInputElement | null> | null,
+    prevRef: React.RefObject<HTMLInputElement | null> | null,
+  ) => {
+    if (e.key === "ArrowLeft" && prevRef?.current) {
+      prevRef.current.focus();
+      e.preventDefault();
+    } else if (e.key === "ArrowRight" && nextRef?.current) {
+      nextRef.current.focus();
+      e.preventDefault();
+    } else if (
+      e.key === "Backspace" &&
+      (e.target as HTMLInputElement).value === "" &&
+      prevRef?.current
+    ) {
+      prevRef.current.focus();
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const statusMap: Record<string, string> = {
+      FREI: "FREI",
+      AKTIV: "AKTIV",
+      WERKSTATT: "WERKSTATT",
+      UNFALL: "UNFALL",
+      ABGEMELDET: "ABGEMELDET",
+    };
+    const backendStatus = statusMap[formData.status] || formData.status;
+
+    const tourRequired = ["AKTIV", "WERKSTATT", "UNFALL"].includes(
+      backendStatus,
+    );
+    const showTourError = tourRequired && !formData.tourNumber;
+    const showLicenseError =
+      !formData.licensePlate || formData.licensePlate.length < 5;
+    setTourError(showTourError);
+    setLicenseError(showLicenseError);
+
+    if (showLicenseError) {
+      alert("Bitte gültiges Kennzeichen eingeben (z.B. B-B-1234)");
+      return;
+    }
+
+    if (showTourError) {
+      return;
+    }
+
     if (mode === "add" && onAdd) {
       onAdd({
         ...formData,
+        status: backendStatus as VehicleStatus,
         tourNumber: formData.tourNumber || undefined,
         driver: formData.driver || undefined,
         nextInspection: formData.nextInspection || undefined,
-        nextOilChange: formData.nextOilChange || undefined,
+        nextWorkshopAppointment: formData.nextWorkshopAppointment || undefined,
+        nextInsurance: formData.nextInsurance || undefined,
       });
     } else if (mode === "edit" && onSave && vehicle) {
-      onSave({
-        ...vehicle,
-        ...formData,
-        tourNumber: formData.tourNumber || undefined,
-        driver: formData.driver || undefined,
-        nextInspection: formData.nextInspection || undefined,
-        nextOilChange: formData.nextOilChange || undefined,
-      });
+      const updates: any = {
+        id: vehicle.id,
+        licensePlate: formData.licensePlate || vehicle.licensePlate,
+        model: formData.model || vehicle.model,
+        mileage: formData.mileage || vehicle.mileage,
+        status: backendStatus,
+      };
+      if (formData.tourNumber) updates.tourNumber = formData.tourNumber;
+      if (formData.driver) updates.driver = formData.driver;
+      if (formData.nextInspection)
+        updates.nextInspection = formData.nextInspection;
+      if (formData.nextWorkshopAppointment)
+        updates.nextWorkshopAppointment = formData.nextWorkshopAppointment;
+      if (formData.nextInsurance)
+        updates.nextInsurance = formData.nextInsurance;
+      onSave(updates);
     }
     onClose();
   };
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <div
@@ -371,15 +466,107 @@ function VehicleModal({
               <label className="block text-sm font-medium text-muted-foreground mb-1">
                 Kennzeichen
               </label>
-              <input
-                type="text"
-                required
-                value={formData.licensePlate}
-                onChange={(e) =>
-                  setFormData({ ...formData, licensePlate: e.target.value })
-                }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
+              <div className="relative">
+                <div className="flex rounded-lg border-2 border-border overflow-hidden bg-card">
+                  <div className="flex-1 flex items-center justify-center p-1">
+                    <input
+                      ref={lpRef1}
+                      type="text"
+                      maxLength={2}
+                      value={formData.licensePlate.split("-")[0] || ""}
+                      onChange={(e) => {
+                        const val = e.target.value
+                          .toUpperCase()
+                          .replace(/[^A-ZÄÖÜ]/g, "")
+                          .slice(0, 2);
+                        const rest = formData.licensePlate.split("-")[2] || "";
+                        const newPlate =
+                          val.length === 2
+                            ? val +
+                              "-" +
+                              (formData.licensePlate.split("-")[1] || "") +
+                              "-" +
+                              rest
+                            : val;
+                        setFormData({
+                          ...formData,
+                          licensePlate: newPlate,
+                        });
+                        if (val.length === 2) lpRef2.current?.focus();
+                      }}
+                      onKeyDown={(e) => handleKeyDown(e, lpRef2, null)}
+                      className="w-full h-14 px-3 bg-muted text-foreground text-center font-mono text-xl font-bold rounded-lg border-2 border-border focus:outline-none focus:border-primary placeholder:text-muted-foreground/50"
+                      placeholder="B"
+                    />
+                  </div>
+                  <div className="w-10 flex items-center justify-center p-1">
+                    <input
+                      ref={lpRef2}
+                      type="text"
+                      maxLength={1}
+                      value={formData.licensePlate.split("-")[1]?.[0] || ""}
+                      onChange={(e) => {
+                        const val = e.target.value
+                          .toUpperCase()
+                          .replace(/[^A-ZÄÖÜ]/g, "")
+                          .slice(-1);
+                        const parts = formData.licensePlate.split("-");
+                        const prefix = parts[0] || "";
+                        const rest = parts[2] || "";
+                        const newPlate = val
+                          ? prefix + "-" + val + (rest ? "-" + rest : "")
+                          : prefix;
+                        setFormData({
+                          ...formData,
+                          licensePlate: newPlate,
+                        });
+                        if (val) lpRef3.current?.focus();
+                      }}
+                      onKeyDown={(e) => handleKeyDown(e, lpRef3, lpRef1)}
+                      className="w-full h-14 px-0 bg-muted text-foreground text-center font-mono text-xl font-bold rounded-lg border-2 border-border focus:outline-none focus:border-primary placeholder:text-muted-foreground/50"
+                      placeholder="-"
+                    />
+                  </div>
+                  <div className="flex-1 flex items-center justify-center p-1">
+                    <input
+                      ref={lpRef3}
+                      type="text"
+                      maxLength={4}
+                      value={formData.licensePlate.split("-")[2] || ""}
+                      onChange={(e) => {
+                        const val = e.target.value
+                          .toUpperCase()
+                          .replace(/[^A-ZÄÖÜ0-9]/g, "")
+                          .slice(0, 4);
+                        const parts = formData.licensePlate.split("-");
+                        const prefix =
+                          parts[0] && parts[1]
+                            ? parts[0] + "-" + parts[1]
+                            : parts[0] || "";
+                        setFormData({
+                          ...formData,
+                          licensePlate: prefix + (prefix ? "-" : "") + val,
+                        });
+                      }}
+                      onKeyDown={(e) => handleKeyDown(e, null, lpRef2)}
+                      className="w-full h-14 px-3 bg-muted text-foreground text-center font-mono text-xl font-bold rounded-lg border-2 border-border focus:outline-none focus:border-primary placeholder:text-muted-foreground/50"
+                      placeholder="1234"
+                    />
+                  </div>
+                </div>
+                {formData.licensePlate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData({ ...formData, licensePlate: "" });
+                      lpRef1.current?.focus();
+                    }}
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-muted rounded-full flex items-center justify-center hover:bg-destructive hover:text-white transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div>
@@ -391,26 +578,12 @@ function VehicleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, model: e.target.value })
                 }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full px-3 py-3 h-14 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
                 <option value="">Auswählen...</option>
                 <option value="Corsa">Corsa</option>
                 <option value="Combo">Combo</option>
               </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">
-                Baujahr
-              </label>
-              <input
-                type="number"
-                value={formData.year}
-                onChange={(e) =>
-                  setFormData({ ...formData, year: parseInt(e.target.value) })
-                }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
             </div>
 
             <div>
@@ -426,7 +599,7 @@ function VehicleModal({
                     mileage: parseInt(e.target.value),
                   })
                 }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full px-3 py-3 h-14 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
 
@@ -442,14 +615,13 @@ function VehicleModal({
                     status: e.target.value as VehicleStatus,
                   })
                 }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full px-3 py-3 h-14 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
-                <option value="verfügbar">Verfügbar</option>
-                <option value="in_benutzung">In Benutzung</option>
-                <option value="werkstatt">Werkstatt</option>
-                <option value="unfall">Unfall</option>
-                <option value="inaktiv">Inaktiv</option>
-                <option value="ersatzfahrzeug">Ersatzfahrzeug</option>
+                <option value="FREI">Frei</option>
+                <option value="AKTIV">Aktiv</option>
+                <option value="WERKSTATT">Werkstatt</option>
+                <option value="UNFALL">Unfall</option>
+                <option value="ABGEMELDET">Abgemeldet</option>
               </select>
             </div>
 
@@ -463,22 +635,36 @@ function VehicleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, driver: e.target.value })
                 }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full px-3 py-3 h-14 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1">
-                Tour-Nummer
+                Tour-Nummer{" "}
+                {["AKTIV", "WERKSTATT", "UNFALL"].includes(formData.status) && (
+                  <span className="text-[#f4212e]">*</span>
+                )}
               </label>
               <input
                 type="text"
                 value={formData.tourNumber}
-                onChange={(e) =>
-                  setFormData({ ...formData, tourNumber: e.target.value })
+                onChange={(e) => {
+                  setFormData({ ...formData, tourNumber: e.target.value });
+                  setTourError(false);
+                }}
+                className={`w-full px-3 py-3 h-14 bg-muted border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 ${tourError ? "border-[#f4212e]" : "border-border"}`}
+                placeholder={
+                  ["AKTIV", "WERKSTATT", "UNFALL"].includes(formData.status)
+                    ? "Pflichtfeld"
+                    : "Optional"
                 }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
+              {tourError && (
+                <p className="text-xs text-[#f4212e] mt-1">
+                  Pflichtfeld für diesen Status
+                </p>
+              )}
             </div>
 
             <div className="relative">
@@ -491,7 +677,7 @@ function VehicleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, nextInspection: e.target.value })
                 }
-                className="w-full px-3 py-2 pr-10 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
+                className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
                 style={{ colorScheme: "dark" }}
               />
               <svg
@@ -511,15 +697,49 @@ function VehicleModal({
 
             <div className="relative">
               <label className="block text-sm font-medium text-muted-foreground mb-1">
-                Nächster Ölwechsel
+                Nächster Werkstatttermin
               </label>
               <input
                 type="date"
-                value={formData.nextOilChange}
+                value={formData.nextWorkshopAppointment}
                 onChange={(e) =>
-                  setFormData({ ...formData, nextOilChange: e.target.value })
+                  setFormData({
+                    ...formData,
+                    nextWorkshopAppointment: e.target.value,
+                  })
                 }
-                className="w-full px-3 py-2 pr-10 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
+                className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
+                style={{ colorScheme: "dark" }}
+              />
+              <svg
+                className="absolute right-2 top-9 w-5 h-5 text-primary pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+
+            <div className="relative">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
+                Nächste Versicherung
+              </label>
+              <input
+                type="date"
+                value={formData.nextInsurance}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    nextInsurance: e.target.value,
+                  })
+                }
+                className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
                 style={{ colorScheme: "dark" }}
               />
               <svg
@@ -538,17 +758,17 @@ function VehicleModal({
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-4 pt-10">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-colors"
+              className="flex-1 px-6 py-3 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-colors"
             >
               Abbrechen
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-colors"
+              className="flex-1 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-colors"
             >
               {mode === "add" ? "Hinzufügen" : "Speichern"}
             </button>
@@ -568,33 +788,89 @@ function AddVehicleModal({
 }) {
   const [formData, setFormData] = useState({
     licensePlate: "",
-    make: "Opel",
     model: "",
-    year: new Date().getFullYear(),
     mileage: 0,
-    status: "verfügbar" as VehicleStatus,
+    status: "FREI" as VehicleStatus,
     driver: "",
     tourNumber: "",
     nextInspection: "",
-    nextOilChange: "",
+    nextWorkshopAppointment: "",
+    nextInsurance: "",
   });
+  const [tourError, setTourError] = useState(false);
+
+  const lpRef1 = useRef<HTMLInputElement>(null);
+  const lpRef2 = useRef<HTMLInputElement>(null);
+  const lpRef3 = useRef<HTMLInputElement>(null);
+
+  const handleKeyDown = (
+    e: React.KeyboardEvent,
+    nextRef: React.RefObject<HTMLInputElement | null> | null,
+    prevRef: React.RefObject<HTMLInputElement | null> | null,
+  ) => {
+    if (e.key === "ArrowLeft" && prevRef?.current) {
+      prevRef.current.focus();
+      e.preventDefault();
+    } else if (e.key === "ArrowRight" && nextRef?.current) {
+      nextRef.current.focus();
+      e.preventDefault();
+    } else if (
+      e.key === "Backspace" &&
+      (e.target as HTMLInputElement).value === "" &&
+      prevRef?.current
+    ) {
+      prevRef.current.focus();
+    }
+  };
+
+  useEffect(() => {
+    lpRef1.current?.focus();
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const statusMap: Record<string, string> = {
+      FREI: "FREI",
+      AKTIV: "AKTIV",
+      WERKSTATT: "WERKSTATT",
+      UNFALL: "UNFALL",
+      ABGEMELDET: "ABGEMELDET",
+    };
+    const backendStatus = statusMap[formData.status] || formData.status;
+
+    const tourRequired = ["AKTIV", "WERKSTATT", "UNFALL"].includes(
+      backendStatus,
+    );
+    const showTourError = tourRequired && !formData.tourNumber;
+    const showLicenseError =
+      !formData.licensePlate || formData.licensePlate.length < 5;
+    setTourError(showTourError);
+
+    if (showLicenseError) {
+      alert("Bitte gültiges Kennzeichen eingeben (z.B. B-B-1234)");
+      return;
+    }
+
+    if (showTourError) {
+      return;
+    }
+
     if (onAdd) {
       onAdd({
         ...formData,
+        status: backendStatus as VehicleStatus,
         tourNumber: formData.tourNumber || undefined,
         driver: formData.driver || undefined,
         nextInspection: formData.nextInspection || undefined,
-        nextOilChange: formData.nextOilChange || undefined,
+        nextWorkshopAppointment: formData.nextWorkshopAppointment || undefined,
+        nextInsurance: formData.nextInsurance || undefined,
       });
     }
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-3xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-foreground">
@@ -614,16 +890,107 @@ function AddVehicleModal({
               <label className="block text-sm font-medium text-muted-foreground mb-1">
                 Kennzeichen
               </label>
-              <input
-                type="text"
-                required
-                value={formData.licensePlate}
-                onChange={(e) =>
-                  setFormData({ ...formData, licensePlate: e.target.value })
-                }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                placeholder="B-HF-123"
-              />
+              <div className="relative">
+                <div className="flex rounded-lg border-2 border-border overflow-hidden bg-card">
+                  <div className="flex-1 flex items-center justify-center p-1">
+                    <input
+                      ref={lpRef1}
+                      type="text"
+                      maxLength={2}
+                      value={formData.licensePlate.split("-")[0] || ""}
+                      onChange={(e) => {
+                        const val = e.target.value
+                          .toUpperCase()
+                          .replace(/[^A-ZÄÖÜ]/g, "")
+                          .slice(0, 2);
+                        const rest = formData.licensePlate.split("-")[2] || "";
+                        const newPlate =
+                          val.length === 2
+                            ? val +
+                              "-" +
+                              (formData.licensePlate.split("-")[1] || "") +
+                              "-" +
+                              rest
+                            : val;
+                        setFormData({
+                          ...formData,
+                          licensePlate: newPlate,
+                        });
+                        if (val.length === 2) lpRef2.current?.focus();
+                      }}
+                      onKeyDown={(e) => handleKeyDown(e, lpRef2, null)}
+                      className="w-full h-14 px-3 bg-muted text-foreground text-center font-mono text-xl font-bold rounded-lg border-2 border-border focus:outline-none focus:border-primary placeholder:text-muted-foreground/50"
+                      placeholder="B"
+                    />
+                  </div>
+                  <div className="w-10 flex items-center justify-center p-1">
+                    <input
+                      ref={lpRef2}
+                      type="text"
+                      maxLength={1}
+                      value={formData.licensePlate.split("-")[1]?.[0] || ""}
+                      onChange={(e) => {
+                        const val = e.target.value
+                          .toUpperCase()
+                          .replace(/[^A-ZÄÖÜ]/g, "")
+                          .slice(-1);
+                        const parts = formData.licensePlate.split("-");
+                        const prefix = parts[0] || "";
+                        const rest = parts[2] || "";
+                        const newPlate = val
+                          ? prefix + "-" + val + (rest ? "-" + rest : "")
+                          : prefix;
+                        setFormData({
+                          ...formData,
+                          licensePlate: newPlate,
+                        });
+                        if (val) lpRef3.current?.focus();
+                      }}
+                      onKeyDown={(e) => handleKeyDown(e, lpRef3, lpRef1)}
+                      className="w-full h-14 px-0 bg-muted text-foreground text-center font-mono text-xl font-bold rounded-lg border-2 border-border focus:outline-none focus:border-primary placeholder:text-muted-foreground/50"
+                      placeholder="-"
+                    />
+                  </div>
+                  <div className="flex-1 flex items-center justify-center p-1">
+                    <input
+                      ref={lpRef3}
+                      type="text"
+                      maxLength={4}
+                      value={formData.licensePlate.split("-")[2] || ""}
+                      onChange={(e) => {
+                        const val = e.target.value
+                          .toUpperCase()
+                          .replace(/[^A-ZÄÖÜ0-9]/g, "")
+                          .slice(0, 4);
+                        const parts = formData.licensePlate.split("-");
+                        const prefix =
+                          parts[0] && parts[1]
+                            ? parts[0] + "-" + parts[1]
+                            : parts[0] || "";
+                        setFormData({
+                          ...formData,
+                          licensePlate: prefix + (prefix ? "-" : "") + val,
+                        });
+                      }}
+                      onKeyDown={(e) => handleKeyDown(e, null, lpRef2)}
+                      className="w-full h-14 px-3 bg-muted text-foreground text-center font-mono text-xl font-bold rounded-lg border-2 border-border focus:outline-none focus:border-primary placeholder:text-muted-foreground/50"
+                      placeholder="1234"
+                    />
+                  </div>
+                </div>
+                {formData.licensePlate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData({ ...formData, licensePlate: "" });
+                      lpRef1.current?.focus();
+                    }}
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-muted rounded-full flex items-center justify-center hover:bg-destructive hover:text-white transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div>
@@ -635,25 +1002,12 @@ function AddVehicleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, model: e.target.value })
                 }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full px-3 py-3 h-14 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
                 <option value="">Auswählen...</option>
                 <option value="Corsa">Corsa</option>
                 <option value="Combo">Combo</option>
               </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">
-                Baujahr
-              </label>
-              <input
-                type="number"
-                value={formData.year}
-                onChange={(e) =>
-                  setFormData({ ...formData, year: parseInt(e.target.value) })
-                }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
             </div>
 
             <div>
@@ -669,7 +1023,7 @@ function AddVehicleModal({
                     mileage: parseInt(e.target.value),
                   })
                 }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full px-3 py-3 h-14 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
 
@@ -685,14 +1039,13 @@ function AddVehicleModal({
                     status: e.target.value as VehicleStatus,
                   })
                 }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full px-3 py-3 h-14 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
-                <option value="verfügbar">Verfügbar</option>
-                <option value="in_benutzung">In Benutzung</option>
-                <option value="werkstatt">Werkstatt</option>
-                <option value="unfall">Unfall</option>
-                <option value="inaktiv">Inaktiv</option>
-                <option value="ersatzfahrzeug">Ersatzfahrzeug</option>
+                <option value="FREI">Frei</option>
+                <option value="AKTIV">Aktiv</option>
+                <option value="WERKSTATT">Werkstatt</option>
+                <option value="UNFALL">Unfall</option>
+                <option value="ABGEMELDET">Abgemeldet</option>
               </select>
             </div>
 
@@ -706,24 +1059,37 @@ function AddVehicleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, driver: e.target.value })
                 }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full px-3 py-3 h-14 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                 placeholder="Optional"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1">
-                Tour-Nummer
+                Tour-Nummer{" "}
+                {["AKTIV", "WERKSTATT", "UNFALL"].includes(formData.status) && (
+                  <span className="text-[#f4212e]">*</span>
+                )}
               </label>
               <input
                 type="text"
                 value={formData.tourNumber}
-                onChange={(e) =>
-                  setFormData({ ...formData, tourNumber: e.target.value })
+                onChange={(e) => {
+                  setFormData({ ...formData, tourNumber: e.target.value });
+                  setTourError(false);
+                }}
+                className={`w-full px-3 py-3 h-14 bg-muted border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 ${tourError ? "border-[#f4212e]" : "border-border"}`}
+                placeholder={
+                  ["AKTIV", "WERKSTATT", "UNFALL"].includes(formData.status)
+                    ? "Pflichtfeld"
+                    : "Optional"
                 }
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                placeholder="Optional"
               />
+              {tourError && (
+                <p className="text-xs text-[#f4212e] mt-1">
+                  Pflichtfeld für diesen Status
+                </p>
+              )}
             </div>
 
             <div className="relative">
@@ -736,7 +1102,7 @@ function AddVehicleModal({
                 onChange={(e) =>
                   setFormData({ ...formData, nextInspection: e.target.value })
                 }
-                className="w-full px-3 py-2 pr-10 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
+                className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
                 style={{ colorScheme: "dark" }}
               />
               <svg
@@ -756,15 +1122,49 @@ function AddVehicleModal({
 
             <div className="relative">
               <label className="block text-sm font-medium text-muted-foreground mb-1">
-                Nächster Ölwechsel
+                Nächster Werkstatttermin
               </label>
               <input
                 type="date"
-                value={formData.nextOilChange}
+                value={formData.nextWorkshopAppointment}
                 onChange={(e) =>
-                  setFormData({ ...formData, nextOilChange: e.target.value })
+                  setFormData({
+                    ...formData,
+                    nextWorkshopAppointment: e.target.value,
+                  })
                 }
-                className="w-full px-3 py-2 pr-10 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
+                className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
+                style={{ colorScheme: "dark" }}
+              />
+              <svg
+                className="absolute right-2 top-9 w-5 h-5 text-primary pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
+                Nächste Versicherung
+              </label>
+              <input
+                type="date"
+                value={formData.nextInsurance}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    nextInsurance: e.target.value,
+                  })
+                }
+                className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
                 style={{ colorScheme: "dark" }}
               />
               <svg
@@ -783,17 +1183,17 @@ function AddVehicleModal({
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-4 pt-10">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-colors"
+              className="flex-1 px-6 py-3 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-colors"
             >
               Abbrechen
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-colors"
+              className="flex-1 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-colors"
             >
               Hinzufügen
             </button>

@@ -19,25 +19,24 @@ import {
 
 interface AppointmentsProps {
   vehicles: Vehicle[];
-  onUpdateVehicle?: (vehicleId: string, updates: Partial<Vehicle>) => void;
+  onUpdateVehicle?: (vehicleId: number, updates: Partial<Vehicle>) => void;
 }
 
-type AppointmentType = "all" | "tuev" | "oil" | "insurance" | "service";
+type AppointmentType = "all" | "tuev" | "workshop" | "insurance";
 
 const typeConfig = {
   all: { label: "Alle", color: "#71767b", icon: Calendar },
   tuev: { label: "TÜV", color: "#ffd400", icon: CheckCircle },
-  oil: { label: "Ölwechsel", color: "#00ba7c", icon: Wrench },
+  workshop: { label: "Werkstatt", color: "#00ba7c", icon: Wrench },
   insurance: { label: "Versicherung", color: "#8250df", icon: Shield },
-  service: { label: "Wartung", color: "#1d9bf0", icon: AlertTriangle },
 };
 
 interface Appointment {
   id: string;
-  vehicleId: string;
+  vehicleId: number;
   vehicleModel: string;
   licensePlate: string;
-  type: "tuev" | "oil" | "insurance" | "service";
+  type: "tuev" | "workshop" | "insurance";
   date: string;
   daysUntil: number;
   isCustom?: boolean;
@@ -50,32 +49,7 @@ export default function Appointments({
   const [typeFilter, setTypeFilter] = useState<AppointmentType>("all");
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingAppointment, setEditingAppointment] =
-    useState<Appointment | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [customAppointments, setCustomAppointments] = useState<Appointment[]>([
-    {
-      id: "demo-1",
-      vehicleId: "1",
-      vehicleModel: "Corsa",
-      licensePlate: "B-HF-100",
-      type: "insurance",
-      date: "2025-04-20",
-      daysUntil: 10,
-      isCustom: true,
-    },
-    {
-      id: "demo-2",
-      vehicleId: "2",
-      vehicleModel: "Combo",
-      licensePlate: "B-HF-101",
-      type: "service",
-      date: "2025-05-15",
-      daysUntil: 35,
-      isCustom: true,
-    },
-  ]);
 
   const appointments: Appointment[] = [];
 
@@ -97,25 +71,42 @@ export default function Appointments({
       });
     }
 
-    if (vehicle.nextOilChange) {
-      const date = new Date(vehicle.nextOilChange);
+    if (vehicle.nextWorkshopAppointment) {
+      const date = new Date(vehicle.nextWorkshopAppointment);
       const today = new Date();
       const daysUntil = Math.ceil(
         (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
       );
       appointments.push({
-        id: `oil-${vehicle.id}`,
+        id: `workshop-${vehicle.id}`,
         vehicleId: vehicle.id,
         vehicleModel: vehicle.model,
         licensePlate: vehicle.licensePlate,
-        type: "oil",
-        date: vehicle.nextOilChange,
+        type: "workshop",
+        date: vehicle.nextWorkshopAppointment,
+        daysUntil,
+      });
+    }
+
+    if (vehicle.nextInsurance) {
+      const date = new Date(vehicle.nextInsurance);
+      const today = new Date();
+      const daysUntil = Math.ceil(
+        (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      appointments.push({
+        id: `insurance-${vehicle.id}`,
+        vehicleId: vehicle.id,
+        vehicleModel: vehicle.model,
+        licensePlate: vehicle.licensePlate,
+        type: "insurance",
+        date: vehicle.nextInsurance,
         daysUntil,
       });
     }
   });
 
-  const allAppointments = [...appointments, ...customAppointments];
+  const allAppointments = appointments;
   const filteredAppointments = allAppointments
     .filter((apt) => {
       if (typeFilter === "all") return true;
@@ -166,14 +157,6 @@ export default function Appointments({
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Termine</h1>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors"
-          style={{ backgroundColor: "#1d9bf0", color: "white" }}
-        >
-          <Plus className="w-4 h-4" />
-          Termin
-        </button>
       </div>
 
       <div className="flex gap-2 flex-wrap">
@@ -284,6 +267,7 @@ export default function Appointments({
                     {new Date(apt.date).toLocaleDateString("de-DE", {
                       day: "2-digit",
                       month: "2-digit",
+                      year: "numeric",
                     })}
                   </div>
                 </div>
@@ -402,63 +386,15 @@ export default function Appointments({
             </div>
 
             <div className="flex gap-3 mt-6">
-              {selectedAppointment?.isCustom && (
-                <button
-                  onClick={() => {
-                    setCustomAppointments((prev) =>
-                      prev.filter((a) => a.id !== selectedAppointment.id),
-                    );
-                    setSelectedAppointment(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl font-medium hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Löschen
-                </button>
-              )}
-              {selectedAppointment?.isCustom ? (
-                <button
-                  onClick={() => {
-                    setEditingAppointment(selectedAppointment);
-                    setSelectedAppointment(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-primary text-white rounded-xl font-medium hover:opacity-90 transition-colors"
-                >
-                  Bearbeiten
-                </button>
-              ) : (
-                <button
-                  onClick={() => setSelectedAppointment(null)}
-                  className="w-full px-4 py-2.5 bg-secondary text-foreground rounded-xl font-medium hover:bg-secondary/80 transition-colors"
-                >
-                  Schließen
-                </button>
-              )}
+              <button
+                onClick={() => setSelectedAppointment(null)}
+                className="w-full px-4 py-2.5 bg-secondary text-foreground rounded-xl font-medium hover:bg-secondary/80 transition-colors"
+              >
+                Schließen
+              </button>
             </div>
           </div>
         </div>
-      )}
-
-      {showAddModal && (
-        <AddAppointmentModal
-          vehicles={vehicles}
-          onClose={() => setShowAddModal(false)}
-          onAdd={(apt) => setCustomAppointments((prev) => [...prev, apt])}
-        />
-      )}
-
-      {editingAppointment && (
-        <AddAppointmentModal
-          vehicles={vehicles}
-          editAppointment={editingAppointment}
-          onClose={() => setEditingAppointment(null)}
-          onUpdate={(updated) => {
-            setCustomAppointments((prev) =>
-              prev.map((a) => (a.id === updated.id ? updated : a)),
-            );
-            setEditingAppointment(null);
-          }}
-        />
       )}
     </div>
   );
@@ -478,10 +414,10 @@ function AddAppointmentModal({
   onUpdate?: (apt: Appointment) => void;
 }) {
   const [formData, setFormData] = useState({
-    vehicleId: editAppointment?.vehicleId || "",
+    vehicleId: editAppointment?.vehicleId || 0,
     type:
       editAppointment?.type ||
-      ("service" as "tuev" | "oil" | "insurance" | "service"),
+      ("workshop" as "tuev" | "workshop" | "insurance" | "workshop"),
     date: editAppointment?.date || "",
   });
 
@@ -551,7 +487,7 @@ function AddAppointmentModal({
               required
               value={formData.vehicleId}
               onChange={(e) =>
-                setFormData({ ...formData, vehicleId: e.target.value })
+                setFormData({ ...formData, vehicleId: Number(e.target.value) })
               }
               className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
@@ -576,9 +512,8 @@ function AddAppointmentModal({
               className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
               <option value="tuev">TÜV</option>
-              <option value="oil">Ölwechsel</option>
+              <option value="workshop">Werkstatt</option>
               <option value="insurance">Versicherung</option>
-              <option value="service">Wartung</option>
             </select>
           </div>
 

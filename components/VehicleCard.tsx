@@ -2,6 +2,7 @@
 
 import { Vehicle, VehicleStatus } from "@/types/vehicle";
 import { CarFront } from "lucide-react";
+import { historyApi } from "@/services/api";
 
 interface VehicleCardProps {
   vehicle: Vehicle;
@@ -9,12 +10,11 @@ interface VehicleCardProps {
 }
 
 const statusConfig = {
-  verfügbar: { label: "Verfügbar", color: "#00ba7c" },
-  in_benutzung: { label: "In Benutzung", color: "#1d9bf0" },
-  werkstatt: { label: "Werkstatt", color: "#ffd400" },
-  unfall: { label: "Unfall", color: "#f4212e" },
-  inaktiv: { label: "Inaktiv", color: "#71767b" },
-  ersatzfahrzeug: { label: "Ersatzfahrzeug", color: "#8250df" },
+  FREI: { label: "Frei", color: "#00ba7c" },
+  AKTIV: { label: "Aktiv", color: "#1d9bf0" },
+  WERKSTATT: { label: "Werkstatt", color: "#ffd400" },
+  UNFALL: { label: "Unfall", color: "#f4212e" },
+  ABGEMELDET: { label: "Abgemeldet", color: "#71767b" },
 };
 
 export default function VehicleCard({
@@ -76,6 +76,38 @@ export default function VehicleCard({
               {new Date(vehicle.nextInspection).toLocaleDateString("de-DE", {
                 day: "2-digit",
                 month: "2-digit",
+                year: "numeric",
+              })}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center justify-between p-2 bg-secondary/40 rounded-lg">
+          <span className="text-xs text-muted-foreground">
+            Nächtster Werkstatttermin
+          </span>
+          <span className="text-sm font-medium text-foreground">
+            {vehicle.nextWorkshopAppointment
+              ? new Date(vehicle.nextWorkshopAppointment).toLocaleDateString(
+                  "de-DE",
+                  {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  },
+                )
+              : "---"}
+          </span>
+        </div>
+        {vehicle.nextInsurance && (
+          <div className="flex items-center justify-between p-2 bg-secondary/40 rounded-lg mt-1">
+            <span className="text-xs text-muted-foreground">
+              Nächste Versicherung
+            </span>
+            <span className="text-sm font-medium text-foreground">
+              {new Date(vehicle.nextInsurance).toLocaleDateString("de-DE", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
               })}
             </span>
           </div>
@@ -86,9 +118,26 @@ export default function VehicleCard({
         <div className="mt-3 pt-3 border-t border-border">
           <select
             value={vehicle.status}
-            onChange={(e) =>
-              onStatusChange(vehicle.id, e.target.value as VehicleStatus)
-            }
+            onClick={(e) => e.stopPropagation()}
+            onChange={async (e) => {
+              e.stopPropagation();
+              const newStatus = e.target.value as VehicleStatus;
+
+              await historyApi.create({
+                vehicleId: Number(vehicle.id),
+                historyType: "STATUS",
+                oldValue: vehicle.status,
+                newValue: newStatus,
+                changeDate: new Date()
+                  .toLocaleString("sv-SE")
+                  .replace(" ", "T"),
+                note: "automatisch",
+              });
+
+              if (onStatusChange) {
+                onStatusChange(String(vehicle.id), newStatus);
+              }
+            }}
             className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all cursor-pointer"
           >
             {Object.entries(statusConfig).map(([key, config]) => (

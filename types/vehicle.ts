@@ -1,26 +1,22 @@
-export type VehicleStatus = 
-  | 'verfügbar' 
-  | 'in_benutzung' 
-  | 'werkstatt' 
-  | 'unfall' 
-  | 'inaktiv' 
-  | 'ersatzfahrzeug';
+export type VehicleStatus =
+  | "FREI"
+  | "AKTIV"
+  | "WERKSTATT"
+  | "UNFALL"
+  | "ABGEMELDET";
 
 export interface Vehicle {
-  id: string;
+  id: number;
   licensePlate: string;
-  make: string;
   model: string;
-  year: number;
   mileage: number;
   status: VehicleStatus;
   tourNumber?: string;
   driver?: string;
   lastInspection?: string;
   nextInspection?: string;
-  nextOilChange?: string;
-  location?: string;
-  notes?: string;
+  nextWorkshopAppointment?: string;
+  nextInsurance?: string;
 }
 
 export interface Tour {
@@ -29,16 +25,16 @@ export interface Tour {
   vehicleId: string;
   driver: string;
   schedule: string;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
 }
 
 export interface Appointment {
   id: string;
   vehicleId: string;
-  type: 'inspection' | 'oil_change' | 'tire_change' | 'maintenance' | 'repair';
+  type: "inspection" | "oil_change" | "tire_change" | "maintenance" | "repair";
   title: string;
   date: string;
-  status: 'scheduled' | 'completed' | 'cancelled';
+  status: "scheduled" | "completed" | "cancelled";
   cost?: number;
   notes?: string;
 }
@@ -46,7 +42,7 @@ export interface Appointment {
 export interface VehicleEvent {
   id: string;
   vehicleId: string;
-  type: 'status_change' | 'appointment' | 'accident' | 'maintenance';
+  type: "status_change" | "appointment" | "accident" | "maintenance";
   title: string;
   description: string;
   date: string;
