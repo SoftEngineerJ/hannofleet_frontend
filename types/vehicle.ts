@@ -14,9 +14,9 @@ export interface Vehicle {
   tourNumber?: string;
   driver?: string;
   lastInspection?: string;
+  lastTuev?: string;
   nextInspection?: string;
   nextWorkshopAppointment?: string;
-  nextInsurance?: string;
 }
 
 export interface Tour {

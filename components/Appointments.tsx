@@ -22,13 +22,12 @@ interface AppointmentsProps {
   onUpdateVehicle?: (vehicleId: number, updates: Partial<Vehicle>) => void;
 }
 
-type AppointmentType = "all" | "tuev" | "workshop" | "insurance";
+type AppointmentType = "all" | "tuev" | "workshop";
 
 const typeConfig = {
   all: { label: "Alle", color: "#71767b", icon: Calendar },
   tuev: { label: "TÜV", color: "#ffd400", icon: CheckCircle },
   workshop: { label: "Werkstatt", color: "#00ba7c", icon: Wrench },
-  insurance: { label: "Versicherung", color: "#8250df", icon: Shield },
 };
 
 interface Appointment {
@@ -36,7 +35,7 @@ interface Appointment {
   vehicleId: number;
   vehicleModel: string;
   licensePlate: string;
-  type: "tuev" | "workshop" | "insurance";
+  type: "tuev" | "workshop";
   date: string;
   daysUntil: number;
   isCustom?: boolean;
@@ -84,23 +83,6 @@ export default function Appointments({
         licensePlate: vehicle.licensePlate,
         type: "workshop",
         date: vehicle.nextWorkshopAppointment,
-        daysUntil,
-      });
-    }
-
-    if (vehicle.nextInsurance) {
-      const date = new Date(vehicle.nextInsurance);
-      const today = new Date();
-      const daysUntil = Math.ceil(
-        (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      appointments.push({
-        id: `insurance-${vehicle.id}`,
-        vehicleId: vehicle.id,
-        vehicleModel: vehicle.model,
-        licensePlate: vehicle.licensePlate,
-        type: "insurance",
-        date: vehicle.nextInsurance,
         daysUntil,
       });
     }
@@ -415,9 +397,7 @@ function AddAppointmentModal({
 }) {
   const [formData, setFormData] = useState({
     vehicleId: editAppointment?.vehicleId || 0,
-    type:
-      editAppointment?.type ||
-      ("workshop" as "tuev" | "workshop" | "insurance" | "workshop"),
+    type: editAppointment?.type || ("workshop" as "tuev" | "workshop"),
     date: editAppointment?.date || "",
   });
 
@@ -513,7 +493,6 @@ function AddAppointmentModal({
             >
               <option value="tuev">TÜV</option>
               <option value="workshop">Werkstatt</option>
-              <option value="insurance">Versicherung</option>
             </select>
           </div>
 

@@ -349,8 +349,9 @@ function VehicleModal({
     driver: vehicle?.driver || "",
     tourNumber: vehicle?.tourNumber || "",
     nextInspection: vehicle?.nextInspection || "",
+    lastInspection: vehicle?.lastInspection || "",
+    lastTuev: vehicle?.lastTuev || "",
     nextWorkshopAppointment: vehicle?.nextWorkshopAppointment || "",
-    nextInsurance: vehicle?.nextInsurance || "",
   });
   const [tourError, setTourError] = useState(false);
   const [licenseError, setLicenseError] = useState(false);
@@ -415,8 +416,9 @@ function VehicleModal({
         tourNumber: formData.tourNumber || undefined,
         driver: formData.driver || undefined,
         nextInspection: formData.nextInspection || undefined,
+        lastInspection: formData.lastInspection || undefined,
+        lastTuev: formData.lastTuev || undefined,
         nextWorkshopAppointment: formData.nextWorkshopAppointment || undefined,
-        nextInsurance: formData.nextInsurance || undefined,
       });
     } else if (mode === "edit" && onSave && vehicle) {
       const updates: any = {
@@ -430,10 +432,11 @@ function VehicleModal({
       if (formData.driver) updates.driver = formData.driver;
       if (formData.nextInspection)
         updates.nextInspection = formData.nextInspection;
+      if (formData.lastInspection)
+        updates.lastInspection = formData.lastInspection;
+      if (formData.lastTuev) updates.lastTuev = formData.lastTuev;
       if (formData.nextWorkshopAppointment)
         updates.nextWorkshopAppointment = formData.nextWorkshopAppointment;
-      if (formData.nextInsurance)
-        updates.nextInsurance = formData.nextInsurance;
       onSave(updates);
     }
     onClose();
@@ -669,6 +672,34 @@ function VehicleModal({
 
             <div className="relative">
               <label className="block text-sm font-medium text-muted-foreground mb-1">
+                Letzte Inspektion
+              </label>
+              <input
+                type="date"
+                value={formData.lastInspection}
+                onChange={(e) =>
+                  setFormData({ ...formData, lastInspection: e.target.value })
+                }
+                className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
+                style={{ colorScheme: "dark" }}
+              />
+              <svg
+                className="absolute right-2 top-9 w-5 h-5 text-primary pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+
+            <div className="relative">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
                 Nächster TÜV
               </label>
               <input
@@ -728,16 +759,13 @@ function VehicleModal({
 
             <div className="relative">
               <label className="block text-sm font-medium text-muted-foreground mb-1">
-                Nächste Versicherung
+                Letzter TÜV
               </label>
               <input
                 type="date"
-                value={formData.nextInsurance}
+                value={formData.lastTuev}
                 onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    nextInsurance: e.target.value,
-                  })
+                  setFormData({ ...formData, lastTuev: e.target.value })
                 }
                 className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
                 style={{ colorScheme: "dark" }}
@@ -794,8 +822,9 @@ function AddVehicleModal({
     driver: "",
     tourNumber: "",
     nextInspection: "",
+    lastInspection: "",
+    lastTuev: "",
     nextWorkshopAppointment: "",
-    nextInsurance: "",
   });
   const [tourError, setTourError] = useState(false);
 
@@ -862,8 +891,9 @@ function AddVehicleModal({
         tourNumber: formData.tourNumber || undefined,
         driver: formData.driver || undefined,
         nextInspection: formData.nextInspection || undefined,
+        lastInspection: formData.lastInspection || undefined,
+        lastTuev: formData.lastTuev || undefined,
         nextWorkshopAppointment: formData.nextWorkshopAppointment || undefined,
-        nextInsurance: formData.nextInsurance || undefined,
       });
     }
     onClose();
@@ -1094,6 +1124,62 @@ function AddVehicleModal({
 
             <div className="relative">
               <label className="block text-sm font-medium text-muted-foreground mb-1">
+                Letzte Inspektion
+              </label>
+              <input
+                type="date"
+                value={formData.lastInspection}
+                onChange={(e) =>
+                  setFormData({ ...formData, lastInspection: e.target.value })
+                }
+                className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
+                style={{ colorScheme: "dark" }}
+              />
+              <svg
+                className="absolute right-2 top-9 w-5 h-5 text-primary pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+
+            <div className="relative">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
+                Letzter TÜV
+              </label>
+              <input
+                type="date"
+                value={formData.lastTuev}
+                onChange={(e) =>
+                  setFormData({ ...formData, lastTuev: e.target.value })
+                }
+                className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
+                style={{ colorScheme: "dark" }}
+              />
+              <svg
+                className="absolute right-2 top-9 w-5 h-5 text-primary pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+
+            <div className="relative">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
                 Nächster TÜV
               </label>
               <input
@@ -1131,37 +1217,6 @@ function AddVehicleModal({
                   setFormData({
                     ...formData,
                     nextWorkshopAppointment: e.target.value,
-                  })
-                }
-                className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"
-                style={{ colorScheme: "dark" }}
-              />
-              <svg
-                className="absolute right-2 top-9 w-5 h-5 text-primary pointer-events-none"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">
-                Nächste Versicherung
-              </label>
-              <input
-                type="date"
-                value={formData.nextInsurance}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    nextInsurance: e.target.value,
                   })
                 }
                 className="w-full px-3 py-3 h-14 pr-10 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer relative"

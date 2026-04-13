@@ -234,7 +234,7 @@ export default function Dashboard({
         {upcomingDeadlines.length > 0 && (
           <div
             className="bg-card border border-border rounded-2xl p-5 animate-fade-in-up"
-            style={{ animationDelay: "0.35s" }}
+            style={{ animationDelay: "0.45s" }}
           >
             <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               <svg

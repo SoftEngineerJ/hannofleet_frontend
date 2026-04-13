@@ -81,6 +81,20 @@ export default function VehicleCard({
             </span>
           </div>
         )}
+        {vehicle.lastInspection && (
+          <div className="flex items-center justify-between p-2 bg-secondary/40 rounded-lg">
+            <span className="text-xs text-muted-foreground">
+              Letzte Inspektion
+            </span>
+            <span className="text-sm font-medium text-foreground">
+              {new Date(vehicle.lastInspection).toLocaleDateString("de-DE", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between p-2 bg-secondary/40 rounded-lg">
           <span className="text-xs text-muted-foreground">
             Nächtster Werkstatttermin
@@ -98,20 +112,6 @@ export default function VehicleCard({
               : "---"}
           </span>
         </div>
-        {vehicle.nextInsurance && (
-          <div className="flex items-center justify-between p-2 bg-secondary/40 rounded-lg mt-1">
-            <span className="text-xs text-muted-foreground">
-              Nächste Versicherung
-            </span>
-            <span className="text-sm font-medium text-foreground">
-              {new Date(vehicle.nextInsurance).toLocaleDateString("de-DE", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-              })}
-            </span>
-          </div>
-        )}
       </div>
 
       {onStatusChange && (

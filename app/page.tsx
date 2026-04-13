@@ -5,6 +5,7 @@ import Navigation from "@/components/Navigation";
 import Dashboard from "@/components/Dashboard";
 import Fleet from "@/components/Fleet";
 import Appointments from "@/components/Appointments";
+import Inspections from "@/components/Inspections";
 import History from "@/components/History";
 import Tours from "@/components/Tours";
 import Settings from "@/components/Settings";
@@ -15,6 +16,7 @@ import { ChevronUp } from "lucide-react";
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [verified, setVerified] = useState(false);
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("activeTab") as string) || "dashboard";
@@ -36,22 +38,25 @@ export default function Home() {
       }
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify`,
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/auth/verify`,
           {
             headers: { Authorization: `Bearer ${token}` },
           },
         );
         if (res.ok) {
           setIsLoggedIn(true);
-        } else {
+        } else if (res.status === 401) {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           setIsLoggedIn(false);
+        } else {
+          setIsLoggedIn(true);
         }
       } catch (e) {
-        setIsLoggedIn(false);
+        setIsLoggedIn(true);
       }
       setLoading(false);
+      setVerified(true);
     };
     verifyToken();
   }, []);
@@ -152,6 +157,17 @@ export default function Home() {
         return <Tours vehicles={vehicleData} />;
       case "appointments":
         return <Appointments vehicles={vehicleData} />;
+      case "inspections":
+        return (
+          <Inspections
+            vehicles={vehicleData}
+            onUpdateVehicle={(updated) =>
+              setVehicleData((prev) =>
+                prev.map((v) => (v.id === updated.id ? updated : v)),
+              )
+            }
+          />
+        );
       case "history":
         return <History vehicles={vehicleData} />;
       case "settings":
@@ -186,7 +202,7 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  if (loading) {
+  if (loading || !verified) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
