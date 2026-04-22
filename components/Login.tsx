@@ -42,8 +42,18 @@ export default function Login({ onLogin }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative">
+      {/* Background Image Overlay */}
+      <div
+        className="fixed inset-0 pointer-events-none z-0"
+        style={{
+          backgroundImage: 'url("/corsa_bg.jpg")',
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          opacity: 0.1,
+        }}
+      />
+      <div className="w-full max-w-md relative z-10">
         <div className="bg-card border border-border rounded-none p-8">
           <div className="text-center mb-6">
             <img

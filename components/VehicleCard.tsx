@@ -1,12 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { Vehicle, VehicleStatus } from "@/types/vehicle";
-import { CarFront } from "lucide-react";
+import { CarFront, X } from "lucide-react";
 import { historyApi } from "@/services/api";
 
 interface VehicleCardProps {
   vehicle: Vehicle;
-  onStatusChange?: (vehicleId: string, newStatus: VehicleStatus) => void;
+  onStatusChange?: (
+    vehicleId: string,
+    newStatus: VehicleStatus,
+    tourNumber?: string,
+  ) => void;
 }
 
 const statusConfig = {
@@ -22,6 +27,37 @@ export default function VehicleCard({
   onStatusChange,
 }: VehicleCardProps) {
   const statusInfo = statusConfig[vehicle.status];
+  const [showTourModal, setShowTourModal] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<VehicleStatus | null>(
+    null,
+  );
+  const [tourInput, setTourInput] = useState("");
+
+  const handleStatusChange = async (newStatus: VehicleStatus) => {
+    const tourRequired = ["AKTIV", "WERKSTATT", "UNFALL"].includes(newStatus);
+    if (tourRequired && !vehicle.tourNumber) {
+      setPendingStatus(newStatus);
+      setTourInput("");
+      setShowTourModal(true);
+      return;
+    }
+    await changeStatus(newStatus, vehicle.tourNumber);
+  };
+
+  const changeStatus = async (newStatus: VehicleStatus, tourNum?: string) => {
+    setShowTourModal(false);
+    await historyApi.create({
+      vehicleId: Number(vehicle.id),
+      historyType: "STATUS",
+      oldValue: vehicle.status,
+      newValue: newStatus,
+      changeDate: new Date().toLocaleString("sv-SE").replace(" ", "T"),
+      note: "automatisch",
+    });
+    if (onStatusChange) {
+      onStatusChange(String(vehicle.id), newStatus, tourNum);
+    }
+  };
 
   return (
     <div className="bg-card border border-border rounded-2xl p-4 card-hover h-full flex flex-col">
@@ -119,24 +155,10 @@ export default function VehicleCard({
           <select
             value={vehicle.status}
             onClick={(e) => e.stopPropagation()}
-            onChange={async (e) => {
+            onChange={(e) => {
               e.stopPropagation();
               const newStatus = e.target.value as VehicleStatus;
-
-              await historyApi.create({
-                vehicleId: Number(vehicle.id),
-                historyType: "STATUS",
-                oldValue: vehicle.status,
-                newValue: newStatus,
-                changeDate: new Date()
-                  .toLocaleString("sv-SE")
-                  .replace(" ", "T"),
-                note: "automatisch",
-              });
-
-              if (onStatusChange) {
-                onStatusChange(String(vehicle.id), newStatus);
-              }
+              handleStatusChange(newStatus);
             }}
             className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all cursor-pointer"
           >
@@ -146,6 +168,64 @@ export default function VehicleCard({
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {showTourModal && pendingStatus && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setShowTourModal(false)}
+        >
+          <div
+            className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-foreground">
+                Tour-Nummer erforderlich
+              </h3>
+              <button
+                onClick={() => setShowTourModal(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Für Status "{statusConfig[pendingStatus].label}" wird eine
+              Tour-Nummer benötigt.
+            </p>
+            <input
+              type="text"
+              value={tourInput}
+              onChange={(e) => setTourInput(e.target.value)}
+              className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground text-sm mb-4"
+              placeholder="Tour-Nummer eingeben..."
+              autoFocus
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                tourInput &&
+                changeStatus(pendingStatus, tourInput)
+              }
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowTourModal(false)}
+                className="flex-1 px-4 py-2 bg-secondary text-foreground rounded-lg text-sm font-medium"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={() =>
+                  tourInput && changeStatus(pendingStatus, tourInput)
+                }
+                disabled={!tourInput}
+                className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                Speichern
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

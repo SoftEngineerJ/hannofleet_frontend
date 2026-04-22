@@ -56,8 +56,24 @@ export const vehicleApi = {
       headers: { "Content-Type": "application/json", ...getAuthHeader() },
       body: JSON.stringify(vehicle),
     });
-    if (!response.ok) throw new Error("Failed to create vehicle");
-    return response.json();
+    const text = await response.text();
+    if (!response.ok) {
+      try {
+        const data = text ? JSON.parse(text) : null;
+        const message = data?.error;
+        throw new Error(message || "Fahrzeug konnte nicht erstellt werden");
+      } catch (e) {
+        if (e instanceof Error && e.message !== "[object Object]") {
+          throw e;
+        }
+        throw new Error("Fahrzeug konnte nicht erstellt werden");
+      }
+    }
+    try {
+      return text ? JSON.parse(text) : { ...vehicle, id: Date.now() };
+    } catch {
+      return { ...vehicle, id: Date.now() };
+    }
   },
 
   update: async (id: string, vehicle: Vehicle): Promise<Vehicle> => {
@@ -70,14 +86,18 @@ export const vehicleApi = {
     return response.json();
   },
 
-  updateStatus: async (id: string, status: VehicleStatus): Promise<Vehicle> => {
-    const response = await fetch(
-      `${VEHICLES_API}/${id}/status?status=${status}`,
-      {
-        method: "PATCH",
-        headers: getAuthHeader(),
-      },
-    );
+  updateStatus: async (
+    id: string,
+    status: VehicleStatus,
+    tourNumber?: string,
+  ): Promise<Vehicle> => {
+    const url = tourNumber
+      ? `${VEHICLES_API}/${id}/status?status=${status}&tourNumber=${encodeURIComponent(tourNumber)}`
+      : `${VEHICLES_API}/${id}/status?status=${status}`;
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers: getAuthHeader(),
+    });
     if (!response.ok) throw new Error("Failed to update status");
     return response.json();
   },
@@ -88,6 +108,28 @@ export const vehicleApi = {
       headers: getAuthHeader(),
     });
     if (!response.ok) throw new Error("Failed to delete vehicle");
+  },
+
+  createBatch: async (vehicles: Omit<Vehicle, "id">[]): Promise<Vehicle[]> => {
+    const response = await fetch(`${VEHICLES_API}/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeader() },
+      body: JSON.stringify(vehicles),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      try {
+        const data = text ? JSON.parse(text) : null;
+        const message = data?.error;
+        throw new Error(message || "Fehler beim Erstellen der Fahrzeuge");
+      } catch (e) {
+        if (e instanceof Error && e.message !== "[object Object]") {
+          throw e;
+        }
+        throw new Error("Fehler beim Erstellen der Fahrzeuge");
+      }
+    }
+    return text ? JSON.parse(text) : [];
   },
 };
 

@@ -26,6 +26,19 @@ export default function Home() {
   const [vehicleData, setVehicleData] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     const verifyToken = async () => {
@@ -34,26 +47,32 @@ export default function Home() {
       if (!token || !user) {
         setIsLoggedIn(false);
         setLoading(false);
+        setVerified(true);
         return;
       }
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/auth/verify`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+        const res = await Promise.race([
+          fetch(
+            `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/auth/verify`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            },
+          ),
+          new Promise<Response>((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), 5000),
+          ),
+        ]);
         if (res.ok) {
           setIsLoggedIn(true);
-        } else if (res.status === 401) {
+        } else {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           setIsLoggedIn(false);
-        } else {
-          setIsLoggedIn(true);
         }
       } catch (e) {
-        setIsLoggedIn(true);
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        setIsLoggedIn(false);
       }
       setLoading(false);
       setVerified(true);
@@ -102,9 +121,14 @@ export default function Home() {
   const handleStatusChange = async (
     vehicleId: string,
     newStatus: VehicleStatus,
+    tourNumber?: string,
   ) => {
     try {
-      const updated = await vehicleApi.updateStatus(vehicleId, newStatus);
+      const updated = await vehicleApi.updateStatus(
+        vehicleId,
+        newStatus,
+        tourNumber,
+      );
       setVehicleData((prev) =>
         prev.map((v) => (String(v.id) === vehicleId ? updated : v)),
       );
@@ -115,13 +139,24 @@ export default function Home() {
 
   const handleAddVehicle = async (newVehicle: Omit<Vehicle, "id">) => {
     try {
-      const created = await vehicleApi.create(newVehicle);
-      setVehicleData((prev) => [...prev, created]);
-    } catch (err) {
-      alert(
-        "Fehler: Backend nicht erreichbar. Fahrzeug konnte nicht erstellt werden.",
+      await vehicleApi.create(newVehicle);
+      const vehicles = await vehicleApi.getAll();
+      setVehicleData(vehicles);
+      setSuccessMessage(
+        `${newVehicle.model} (${newVehicle.licensePlate}) wurde hinzugefügt.`,
       );
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unbekannter Fehler";
+      alert(`Fehler: ${msg}`);
     }
+  };
+
+  const handleAddMultiple = async (count: number) => {
+    const vehicles = await vehicleApi.getAll();
+    setVehicleData(vehicles);
+    setSuccessMessage(`${count} Fahrzeuge wurden erfolgreich hinzugefügt.`);
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   const handleDeleteVehicle = async (vehicleId: string) => {
@@ -150,6 +185,7 @@ export default function Home() {
             vehicles={vehicleData}
             onStatusChange={handleStatusChange}
             onAddVehicle={handleAddVehicle}
+            onAddMultiple={handleAddMultiple}
             onDeleteVehicle={handleDeleteVehicle}
           />
         );
@@ -179,12 +215,14 @@ export default function Home() {
               localStorage.setItem("theme", newTheme);
             }}
             onLogout={async () => {
+              localStorage.removeItem("user");
+              localStorage.removeItem("token");
+              localStorage.removeItem("activeTab");
               try {
                 await authApi.logout();
               } catch (e) {}
-              localStorage.removeItem("user");
-              localStorage.removeItem("token");
               setIsLoggedIn(false);
+              window.location.href = "/?t=" + Date.now();
             }}
           />
         );
@@ -233,9 +271,20 @@ export default function Home() {
           setTheme(newTheme);
           localStorage.setItem("theme", newTheme);
         }}
-        onLogout={() => setIsLoggedIn(false)}
+        onLogout={() => {
+          localStorage.removeItem("user");
+          localStorage.removeItem("token");
+          localStorage.removeItem("activeTab");
+          setIsLoggedIn(false);
+          window.location.href = "/?t=" + Date.now();
+        }}
       />
       <main>{renderContent()}</main>
+      {successMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-lg z-50 animate-fade-in-up">
+          {successMessage}
+        </div>
+      )}
       <button
         onClick={scrollToTop}
         className="fixed bottom-6 right-6 w-14 h-14 bg-transparent border border-primary/50 text-primary rounded-none flex items-center justify-center hover:bg-primary/10 transition-all z-50 cursor-pointer"

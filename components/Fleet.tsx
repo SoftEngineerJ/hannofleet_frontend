@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Vehicle, VehicleStatus } from "@/types/vehicle";
 import VehicleCard from "./VehicleCard";
+import BatchAddModal from "./BatchAddModal";
 import { historyApi, vehicleApi } from "@/services/api";
 import {
   Search,
@@ -13,12 +14,18 @@ import {
   Gauge,
   User,
   Route,
+  Upload,
 } from "lucide-react";
 
 interface FleetProps {
   vehicles: Vehicle[];
-  onStatusChange: (vehicleId: string, newStatus: VehicleStatus) => void;
+  onStatusChange: (
+    vehicleId: string,
+    newStatus: VehicleStatus,
+    tourNumber?: string,
+  ) => void;
   onAddVehicle?: (vehicle: Omit<Vehicle, "id">) => void;
+  onAddMultiple?: (count: number) => void;
   onDeleteVehicle?: (vehicleId: string) => void;
 }
 
@@ -35,11 +42,13 @@ export default function Fleet({
   vehicles,
   onStatusChange,
   onAddVehicle,
+  onAddMultiple,
   onDeleteVehicle,
 }: FleetProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
@@ -61,12 +70,11 @@ export default function Fleet({
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Fahrzeugflotte</h1>
         <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors"
-          style={{ backgroundColor: "#1d9bf0", color: "white" }}
+          onClick={() => setShowBatchModal(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors bg-emerald-600 text-white hover:bg-emerald-700"
         >
-          <Plus className="w-4 h-4" />
-          Fahrzeug hinzufügen
+          <Upload className="w-4 h-4" />
+          Fahrzeuge hinzufügen
         </button>
       </div>
 
@@ -81,16 +89,16 @@ export default function Fleet({
             className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {statusOptions.map((option) => (
+        <div className="inline-flex gap-1 p-1 bg-secondary/50 rounded-full">
+          {statusOptions.map((option, index) => (
             <button
               key={option.value}
               onClick={() => setStatusFilter(option.value)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 statusFilter === option.value
                   ? "bg-primary text-white"
-                  : "bg-secondary text-muted-foreground hover:text-foreground"
-              }`}
+                  : "text-muted-foreground hover:text-foreground"
+              } ${index > 0 ? "border-l-2 border-muted-foreground/30" : ""}`}
             >
               {option.label}
             </button>
@@ -110,7 +118,12 @@ export default function Fleet({
             style={{ animationDelay: `${index * 0.03}s` }}
             onClick={() => setSelectedVehicle(vehicle)}
           >
-            <VehicleCard vehicle={vehicle} onStatusChange={onStatusChange} />
+            <VehicleCard
+              vehicle={vehicle}
+              onStatusChange={(id, status, tourNum) =>
+                onStatusChange(id, status, tourNum)
+              }
+            />
           </div>
         ))}
       </div>
@@ -126,6 +139,18 @@ export default function Fleet({
           mode="add"
           onClose={() => setShowAddModal(false)}
           onAdd={onAddVehicle}
+        />
+      )}
+
+      {showBatchModal && (
+        <BatchAddModal
+          onClose={() => setShowBatchModal(false)}
+          onAdd={(vehicle) => {
+            if (onAddVehicle && !onAddMultiple) {
+              onAddVehicle(vehicle);
+            }
+          }}
+          onAddMultiple={onAddMultiple}
         />
       )}
 
@@ -179,7 +204,11 @@ export default function Fleet({
                 note: "automatisch",
               });
             }
-            onStatusChange(String(updated.id), updated.status);
+            onStatusChange(
+              String(updated.id),
+              updated.status,
+              updated.tourNumber,
+            );
             setEditingVehicle(null);
           }}
         />
@@ -577,7 +606,7 @@ function VehicleModal({
                 Modell
               </label>
               <select
-                value={formData.model}
+                value={formData.model || ""}
                 onChange={(e) =>
                   setFormData({ ...formData, model: e.target.value })
                 }
@@ -586,7 +615,21 @@ function VehicleModal({
                 <option value="">Auswählen...</option>
                 <option value="Corsa">Corsa</option>
                 <option value="Combo">Combo</option>
+                <option value="__SONSTIGES__">Sonstiges</option>
               </select>
+              {(formData.model === "__SONSTIGES__" ||
+                (formData.model &&
+                  !["Corsa", "Combo", ""].includes(formData.model))) && (
+                <input
+                  type="text"
+                  value=""
+                  onChange={(e) =>
+                    setFormData({ ...formData, model: e.target.value })
+                  }
+                  className="w-full px-3 py-3 h-14 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 mt-2"
+                  placeholder="Modell eingeben..."
+                />
+              )}
             </div>
 
             <div>
@@ -1028,7 +1071,7 @@ function AddVehicleModal({
                 Modell
               </label>
               <select
-                value={formData.model}
+                value={formData.model || ""}
                 onChange={(e) =>
                   setFormData({ ...formData, model: e.target.value })
                 }
@@ -1037,7 +1080,21 @@ function AddVehicleModal({
                 <option value="">Auswählen...</option>
                 <option value="Corsa">Corsa</option>
                 <option value="Combo">Combo</option>
+                <option value="__SONSTIGES__">Sonstiges</option>
               </select>
+              {(formData.model === "__SONSTIGES__" ||
+                (formData.model &&
+                  !["Corsa", "Combo", ""].includes(formData.model))) && (
+                <input
+                  type="text"
+                  value=""
+                  onChange={(e) =>
+                    setFormData({ ...formData, model: e.target.value })
+                  }
+                  className="w-full px-3 py-3 h-14 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 mt-2"
+                  placeholder="Modell eingeben..."
+                />
+              )}
             </div>
 
             <div>
